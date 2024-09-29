@@ -6,7 +6,9 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  connectionLimit: 5
+  connectionLimit: 5,
+  connectTimeout: 30000, // Increase timeout to 30 seconds
+  acquireTimeout: 30000 // Increase acquire timeout to 30 seconds
 });
 
 exports.handler = async (event, context) => {
