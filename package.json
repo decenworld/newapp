@@ -1,0 +1,36 @@
+{
+  "name": "cookie-clicker",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "faunadb": "^4.8.0",
+    "fs": "^0.0.1-security",
+    "idb": "^7.0.0",
+    "mariadb": "^3.3.2",
+    "path": "^0.12.7",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-scripts": "4.0.3"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.36.2"
+  }
+}

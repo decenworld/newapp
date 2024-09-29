@@ -1,0 +1,184 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.cookie-count, .cps {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.cookie-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 300px;
+    position: relative;
+}
+
+.cookie {
+    width: 200px;
+    height: 200px;
+    background-image: url('https://placehold.co/250x250/8B4513/FFF?text=Cookie');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.cookie:active {
+    transform: scale(0.95);
+}
+
+.cookie-crumb {
+    position: absolute;
+    font-size: 20px;
+    font-weight: bold;
+    color: #8B4513;
+    pointer-events: none;
+    animation: float-up 1s ease-out;
+    opacity: 0;
+}
+
+@keyframes float-up {
+    0% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-around;
+    background-color: #333;
+    padding: 10px 0;
+}
+
+.nav-item {
+    color: white;
+    text-align: center;
+    cursor: pointer;
+}
+
+.nav-icon {
+    font-size: 24px;
+}
+
+.nav-text {
+    font-size: 12px;
+}
+
+.store {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    max-width: 80%;
+    max-height: 80%;
+    overflow-y: auto;
+    flex-direction: column;
+}
+
+.store-header {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.store-close {
+    cursor: pointer;
+    font-size: 28px;
+}
+
+.upgrade-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.upgrade-icon {
+    font-size: 24px;
+    margin-right: 10px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    border-radius: 50%;
+}
+
+.upgrade-info {
+    flex-grow: 1;
+}
+
+.upgrade-name {
+    font-weight: bold;
+}
+
+.upgrade-description {
+    font-size: 12px;
+    color: #666;
+}
+
+.upgrade-buttons {
+    display: flex;
+    flex-direction: column;
+}
+
+.buy-button, .info-button {
+    margin: 5px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.buy-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.achievement {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 16px;
+    z-index: 1000;
+}
