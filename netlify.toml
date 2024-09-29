@@ -7,3 +7,15 @@
   NODE_VERSION = "18"
 
 # Remove the problematic redirect
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["mariadb"]
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions."load-user-data"]
+  timeout = 60
