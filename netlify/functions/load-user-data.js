@@ -31,18 +31,61 @@ async function connectWithRetry(retries = MAX_RETRIES) {
 }
 
 exports.handler = async (event, context) => {
+  console.log('Received event:', event);
+  
+  const userId = event.queryStringParameters.userId;
+  console.log('Attempting to load data for user:', userId);
+
   let conn;
   try {
-    conn = await connectWithRetry();
+    console.log('Attempting to connect to database...');
+    conn = await pool.getConnection();
     console.log('Connected to database successfully');
-    // ... rest of your function code ...
+
+    // Check if user exists
+    const userExists = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
+    
+    if (userExists.length === 0) {
+      console.log('User does not exist. Creating new user data.');
+      // Insert new user with default values
+      await conn.query(
+        'INSERT INTO user_data (user_id, cookies_collected, buildings_data, last_updated) VALUES (?, ?, ?, NOW())',
+        [userId, 0, JSON.stringify({})]
+      );
+      console.log('New user data created successfully');
+    }
+
+    console.log('Executing query to fetch user data...');
+    const rows = await conn.query('SELECT cookies_collected, buildings_data FROM user_data WHERE user_id = ?', [userId]);
+    console.log('Query executed successfully');
+    
+    if (rows.length > 0) {
+      const userData = {
+        cookies: rows[0].cookies_collected,
+        buildings: JSON.parse(rows[0].buildings_data)
+      };
+      console.log('User data found:', userData);
+      return {
+        statusCode: 200,
+        body: JSON.stringify(userData)
+      };
+    } else {
+      console.log('No data found for user:', userId);
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ message: 'No data found for user' })
+      };
+    }
   } catch (err) {
-    console.error('Database error after retries:', err);
+    console.error('Database error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to connect to database after multiple attempts', details: err.message })
+      body: JSON.stringify({ error: 'Failed to load user data', details: err.message })
     };
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      console.log('Closing database connection');
+      conn.release();
+    }
   }
 };

@@ -6,26 +6,34 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  connectionLimit: 5
+  connectionLimit: 5,
+  connectTimeout: 30000,
+  acquireTimeout: 30000
 });
 
 exports.handler = async (event, context) => {
+  console.log('Received event:', event);
+  
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const { userId, gameState } = JSON.parse(event.body);
+  const { userId, cookies, buildings } = JSON.parse(event.body);
   console.log('Attempting to save data for user:', userId);
 
   let conn;
   try {
+    console.log('Attempting to connect to database...');
     conn = await pool.getConnection();
+    console.log('Connected to database successfully');
+
+    console.log('Executing query to save user data...');
     await conn.query(
-      'INSERT INTO user_game_data (user_id, cookies_collected, buildings_data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?',
-      [userId, gameState.cookies, JSON.stringify(gameState.buildings), gameState.cookies, JSON.stringify(gameState.buildings)]
+      'INSERT INTO user_data (user_id, cookies_collected, buildings_data, last_updated) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?, last_updated = NOW()',
+      [userId, cookies, JSON.stringify(buildings), cookies, JSON.stringify(buildings)]
     );
-    
-    console.log('Data saved successfully for user:', userId);
+    console.log('User data saved successfully');
+
     return {
       statusCode: 200,
       body: JSON.stringify({ message: 'Data saved successfully' })
@@ -34,9 +42,12 @@ exports.handler = async (event, context) => {
     console.error('Database error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save user data' })
+      body: JSON.stringify({ error: 'Failed to save user data', details: err.message })
     };
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      console.log('Closing database connection');
+      conn.release();
+    }
   }
 };
