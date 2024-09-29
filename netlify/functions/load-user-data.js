@@ -17,8 +17,13 @@ exports.handler = async (event, context) => {
 
   let conn;
   try {
+    console.log('Attempting to connect to database...');
     conn = await pool.getConnection();
+    console.log('Connected to database successfully');
+
+    console.log('Executing query...');
     const rows = await conn.query('SELECT cookies_collected, buildings_data FROM user_game_data WHERE user_id = ?', [userId]);
+    console.log('Query executed successfully');
     
     if (rows.length > 0) {
       const userData = {
@@ -41,9 +46,12 @@ exports.handler = async (event, context) => {
     console.error('Database error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to load user data' })
+      body: JSON.stringify({ error: 'Failed to load user data', details: err.message })
     };
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      console.log('Closing database connection');
+      conn.release();
+    }
   }
 };
