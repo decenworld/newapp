@@ -44,7 +44,6 @@ function App() {
   const [isOffline, setIsOffline] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(0);
   const loadAttempts = useRef(0);
-  const userIdFetched = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -52,25 +51,40 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const fetchUserId = () => {
-      if (!userIdFetched.current && window.Telegram && window.Telegram.WebApp) {
-        const tg = window.Telegram.WebApp;
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-          setUserId(tg.initDataUnsafe.user.id.toString());
-          console.log('Telegram user ID set:', tg.initDataUnsafe.user.id);
-        } else {
-          console.error('Telegram user data not available');
+    const loadTelegramScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.Telegram) {
+          resolve();
+          return;
         }
-        userIdFetched.current = true;
+        const script = document.createElement('script');
+        script.src = 'https://telegram.org/js/telegram-web-app.js';
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    };
+
+    const initTelegram = async () => {
+      try {
+        await loadTelegramScript();
+        if (window.Telegram && window.Telegram.WebApp) {
+          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+          if (initDataUnsafe && initDataUnsafe.user) {
+            setUserId(initDataUnsafe.user.id.toString());
+          } else {
+            console.error('Telegram user data not available');
+          }
+        } else {
+          console.error('Telegram WebApp not available');
+        }
+      } catch (error) {
+        console.error('Failed to load Telegram script:', error);
       }
     };
 
-    if (document.readyState === 'complete') {
-      fetchUserId();
-    } else {
-      window.addEventListener('load', fetchUserId);
-      return () => window.removeEventListener('load', fetchUserId);
-    }
+    initTelegram();
   }, []);
 
   const saveGame = useCallback(async () => {
