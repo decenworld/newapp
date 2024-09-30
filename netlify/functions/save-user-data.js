@@ -10,17 +10,20 @@ const pool = mariadb.createPool({
 
 exports.handler = async (event, context) => {
   console.log('Save function called');
+  console.log('Event:', JSON.stringify(event));
 
   if (event.httpMethod !== 'POST') {
+    console.error('Invalid HTTP method:', event.httpMethod);
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
   let data;
   try {
     data = JSON.parse(event.body);
+    console.log('Parsed data:', JSON.stringify(data));
   } catch (error) {
     console.error('Error parsing request body:', error);
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body', details: error.message }) };
   }
 
   const { userId, cookies_collected, buildings_data, achievements } = data;
@@ -47,18 +50,28 @@ exports.handler = async (event, context) => {
         last_updated = CURRENT_TIMESTAMP
     `;
 
-    await conn.query(query, [userId, cookies_collected, buildings_data, achievements]);
-    console.log('User data saved successfully');
+    console.log('Executing query:', query);
+    console.log('Query parameters:', [userId, cookies_collected, buildings_data, achievements]);
+
+    const result = await conn.query(query, [userId, cookies_collected, buildings_data, achievements]);
+    console.log('Query result:', JSON.stringify(result));
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Data saved successfully' }),
+      body: JSON.stringify({ message: 'Data saved successfully', result }),
     };
   } catch (error) {
     console.error('Error saving data:', error);
+    console.error('Error stack:', error.stack);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message, stack: error.stack })
+      body: JSON.stringify({ 
+        error: 'Failed to save data', 
+        details: error.message, 
+        stack: error.stack,
+        sqlState: error.sqlState,
+        sqlMessage: error.sqlMessage
+      })
     };
   } finally {
     if (conn) {

@@ -115,7 +115,10 @@ function App() {
   }, [userId, calculateTotalCps]);
 
   const saveGame = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.error('Cannot save game: userId is not set');
+      return;
+    }
 
     const currentState = {
       userId,
@@ -124,6 +127,8 @@ function App() {
       achievements: JSON.stringify(unlockedAchievements),
     };
 
+    console.log('Attempting to save game state:', currentState);
+
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
@@ -131,7 +136,10 @@ function App() {
         body: JSON.stringify(currentState),
       });
 
-      if (!response.ok) throw new Error('Failed to save game');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${errorText}`);
+      }
 
       const result = await response.json();
       console.log('Save result:', result);
@@ -148,10 +156,12 @@ function App() {
   useEffect(() => {
     if (userId) {
       const saveInterval = setInterval(() => {
-        console.log('Attempting to save game...');
+        console.log('Triggering save game...');
         saveGame();
       }, 5000);
       return () => clearInterval(saveInterval);
+    } else {
+      console.log('Save interval not set: userId is null');
     }
   }, [userId, saveGame]);
 
