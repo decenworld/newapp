@@ -48,45 +48,75 @@ function App() {
   }, []);
 
   const loadGame = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('No userId available, skipping load');
+      return;
+    }
 
     try {
+      console.log('Attempting to load game state for user:', userId);
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
       if (!response.ok) {
-        throw new Error('Failed to load game data');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      const loadedBuildings = data.buildings_data || initialGameState.buildings;
+      console.log('Loaded game state:', data);
+
+      if (data.cookies_collected === undefined || !Array.isArray(data.buildings_data)) {
+        throw new Error('Invalid data structure received');
+      }
+
+      const loadedBuildings = data.buildings_data.map((building, index) => ({
+        ...initialGameState.buildings[index],
+        ...building,
+      }));
+
       setGameState(prevState => ({
         ...prevState,
-        cookies: data.cookies_collected || 0,
+        cookies: data.cookies_collected,
         buildings: loadedBuildings,
         cps: calculateTotalCps(loadedBuildings),
       }));
       setUnlockedAchievements(data.achievements || []);
     } catch (error) {
       console.error('Failed to load game:', error);
+      // Optionally, set some default state or show an error message to the user
     }
   }, [userId, calculateTotalCps]);
 
   const saveGame = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('No userId available, skipping save');
+      return;
+    }
 
+    const currentState = {
+      cookies_collected: Math.floor(gameState.cookies),
+      buildings_data: gameState.buildings,
+      achievements: unlockedAchievements,
+    };
+
+    console.log('Attempting to save game state:', currentState);
     try {
-      await fetch('/.netlify/functions/save-user-data', {
+      const response = await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           userId,
-          cookies_collected: gameState.cookies,
-          buildings_data: gameState.buildings,
-          achievements: unlockedAchievements,
+          ...currentState,
         }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Save result:', result);
     } catch (error) {
-      console.error('Failed to save game:', error);
+      console.error('Error saving user data:', error);
     }
   }, [userId, gameState, unlockedAchievements]);
 
@@ -97,7 +127,7 @@ function App() {
   }, [userId, loadGame]);
 
   useEffect(() => {
-    const saveInterval = setInterval(saveGame, 60000); // Save every minute
+    const saveInterval = setInterval(saveGame, 5000); // Save every 5 seconds
     return () => clearInterval(saveInterval);
   }, [saveGame]);
 
@@ -162,7 +192,8 @@ function App() {
       gameState, 
       clickCookie, 
       buyBuilding,
-      unlockedAchievements
+      unlockedAchievements,
+      saveGame // Add this so we can trigger a save manually if needed
     }}>
       <div className="App">
         <Game />
