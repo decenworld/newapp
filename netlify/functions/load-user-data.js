@@ -11,6 +11,23 @@ const pool = mariadb.createPool({
   acquireTimeout: 30000
 });
 
+async function createTableIfNotExists(conn) {
+  try {
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS user_data (
+        user_id VARCHAR(255) PRIMARY KEY,
+        cookies_collected INT DEFAULT 0,
+        buildings_data JSON,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Table user_data created or already exists');
+  } catch (err) {
+    console.error('Error creating table:', err);
+    throw err;
+  }
+}
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000; // 5 seconds
 
@@ -42,6 +59,8 @@ exports.handler = async (event, context) => {
     conn = await pool.getConnection();
     console.log('Connected to database successfully');
 
+    await createTableIfNotExists(conn);
+
     // Check if user exists
     const userExists = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
     
@@ -49,7 +68,7 @@ exports.handler = async (event, context) => {
       console.log('User does not exist. Creating new user data.');
       // Insert new user with default values
       await conn.query(
-        'INSERT INTO user_data (user_id, cookies_collected, buildings_data, last_updated) VALUES (?, ?, ?, NOW())',
+        'INSERT INTO user_data (user_id, cookies_collected, buildings_data) VALUES (?, ?, ?)',
         [userId, 0, JSON.stringify({})]
       );
       console.log('New user data created successfully');
