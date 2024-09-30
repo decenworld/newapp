@@ -9,6 +9,22 @@ const pool = mariadb.createPool({
   connectionLimit: 5,
 });
 
+// Helper function to recursively convert BigInt to Number
+const convertBigIntToNumber = (obj) => {
+  if (typeof obj === 'bigint') {
+    return Number(obj);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(convertBigIntToNumber);
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([key, value]) => [key, convertBigIntToNumber(value)])
+    );
+  }
+  return obj;
+};
+
 exports.handler = async (event, context) => {
   console.log('Save function called at:', new Date().toISOString());
 
@@ -18,13 +34,9 @@ exports.handler = async (event, context) => {
 
   let data;
   try {
-    data = JSON.parse(event.body, (key, value) => {
-      if (typeof value === 'bigint') {
-        return Number(value);
-      }
-      return value;
-    });
-    console.log('Parsed data:', JSON.stringify(data));
+    data = JSON.parse(event.body);
+    data = convertBigIntToNumber(data);
+    console.log('Parsed and converted data:', JSON.stringify(data));
   } catch (error) {
     console.error('Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
@@ -56,11 +68,12 @@ exports.handler = async (event, context) => {
     console.log('Query parameters:', [userId, cookies_collected, buildings_data, achievements]);
 
     const result = await conn.query(query, [userId, cookies_collected, buildings_data, achievements]);
-    console.log('Save result:', JSON.stringify(result));
+    const safeResult = convertBigIntToNumber(result);
+    console.log('Save result:', JSON.stringify(safeResult));
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Data saved successfully', result }),
+      body: JSON.stringify({ message: 'Data saved successfully', result: safeResult }),
     };
   } catch (error) {
     console.error('Error saving data:', error);
