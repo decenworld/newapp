@@ -52,28 +52,24 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!userIdFetched.current) {
-      const fetchUserId = () => {
-        if (window.Telegram && window.Telegram.WebApp) {
-          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-          if (initDataUnsafe && initDataUnsafe.user) {
-            setUserId(initDataUnsafe.user.id.toString());
-          } else {
-            console.error('Telegram user data not available');
-          }
+    const fetchUserId = () => {
+      if (!userIdFetched.current && window.Telegram && window.Telegram.WebApp) {
+        const tg = window.Telegram.WebApp;
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+          setUserId(tg.initDataUnsafe.user.id.toString());
+          console.log('Telegram user ID set:', tg.initDataUnsafe.user.id);
         } else {
-          console.error('Telegram WebApp not available');
+          console.error('Telegram user data not available');
         }
-      };
-
-      if (document.readyState === 'complete') {
-        fetchUserId();
-      } else {
-        window.addEventListener('load', fetchUserId);
-        return () => window.removeEventListener('load', fetchUserId);
+        userIdFetched.current = true;
       }
+    };
 
-      userIdFetched.current = true;
+    if (document.readyState === 'complete') {
+      fetchUserId();
+    } else {
+      window.addEventListener('load', fetchUserId);
+      return () => window.removeEventListener('load', fetchUserId);
     }
   }, []);
 
