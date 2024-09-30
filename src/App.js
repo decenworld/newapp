@@ -43,6 +43,7 @@ function App() {
   const [loadError, setLoadError] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(0);
+  const [loadAttempts, setLoadAttempts] = useState(0);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -50,22 +51,40 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Try to get userId from URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    let id = urlParams.get('userId');
+    const loadTelegramScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.Telegram) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://telegram.org/js/telegram-web-app.js';
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    };
 
-    // If not in URL, try to get from localStorage
-    if (!id) {
-      id = localStorage.getItem('userId');
-    }
+    const initTelegram = async () => {
+      try {
+        await loadTelegramScript();
+        if (window.Telegram && window.Telegram.WebApp) {
+          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+          if (initDataUnsafe && initDataUnsafe.user) {
+            setUserId(initDataUnsafe.user.id.toString());
+          } else {
+            console.error('Telegram user data not available');
+          }
+        } else {
+          console.error('Telegram WebApp not available');
+        }
+      } catch (error) {
+        console.error('Failed to load Telegram script:', error);
+      }
+    };
 
-    // If still no userId, generate a random one (for development purposes)
-    if (!id) {
-      id = 'user_' + Date.now();
-      localStorage.setItem('userId', id);
-    }
-
-    setUserId(id);
+    initTelegram();
   }, []);
 
   const saveGame = useCallback(async () => {
@@ -97,7 +116,7 @@ function App() {
   }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
   const loadGame = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || loadAttempts >= 2) return;
 
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
@@ -117,8 +136,10 @@ function App() {
       console.error('Failed to load game:', error);
       setLoadError(error.message);
       setIsOffline(!navigator.onLine);
+    } finally {
+      setLoadAttempts(prev => prev + 1);
     }
-  }, [userId, calculateTotalCps]);
+  }, [userId, calculateTotalCps, loadAttempts]);
 
   useEffect(() => {
     if (userId) {
