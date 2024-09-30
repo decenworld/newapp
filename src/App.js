@@ -6,6 +6,7 @@ export const GameContext = createContext();
 
 const initialGameState = {
   cookies: 0,
+  cps: 0,  // Add this line to include CPS in the initial state
   buildings: [
     { name: "Cursor", baseCost: 15, baseCps: 0.1, count: 0 },
     { name: "Grandma", baseCost: 100, baseCps: 1, count: 0 },
@@ -29,6 +30,11 @@ function App() {
   const [userId, setUserId] = useState(null);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
 
+  // Add this function to calculate total CPS
+  const calculateTotalCps = useCallback((buildings) => {
+    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
+  }, []);
+
   useEffect(() => {
     // Set userId here, e.g., from localStorage or a login process
     const storedUserId = localStorage.getItem('userId');
@@ -50,16 +56,18 @@ function App() {
         throw new Error('Failed to load game data');
       }
       const data = await response.json();
+      const loadedBuildings = data.buildings_data || initialGameState.buildings;
       setGameState(prevState => ({
         ...prevState,
         cookies: data.cookies_collected || 0,
-        buildings: data.buildings_data || initialGameState.buildings,
+        buildings: loadedBuildings,
+        cps: calculateTotalCps(loadedBuildings),
       }));
       setUnlockedAchievements(data.achievements || []);
     } catch (error) {
       console.error('Failed to load game:', error);
     }
-  }, [userId]);
+  }, [userId, calculateTotalCps]);
 
   const saveGame = useCallback(async () => {
     if (!userId) return;
@@ -124,13 +132,12 @@ function App() {
           ...building,
           count: building.count + 1
         };
-        const newCookies = prevState.cookies - cost;
         const newCps = calculateTotalCps(newBuildings);
         return {
           ...prevState,
-          cookies: newCookies,
-          cps: newCps,
-          buildings: newBuildings
+          cookies: prevState.cookies - cost,
+          buildings: newBuildings,
+          cps: newCps
         };
       }
       return prevState;
@@ -138,14 +145,14 @@ function App() {
   }, [calculateTotalCps]);
 
   useEffect(() => {
-    const gameLoop = setInterval(() => {
+    const cookieInterval = setInterval(() => {
       setGameState(prevState => ({
         ...prevState,
-        cookies: prevState.cookies + prevState.cps / 10
+        cookies: prevState.cookies + prevState.cps / 10  // Update every 100ms
       }));
     }, 100);
 
-    return () => clearInterval(gameLoop);
+    return () => clearInterval(cookieInterval);
   }, []);
 
   console.log('App rendered, userId:', userId);
