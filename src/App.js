@@ -115,7 +115,10 @@ function App() {
   }, [userId, loadUserData]);
 
   const saveUserData = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('No userId available, skipping save');
+      return;
+    }
 
     const currentState = {
       cookies_collected: Math.floor(gameState.cookies),
@@ -124,6 +127,7 @@ function App() {
 
     console.log('Attempting to save game state:', currentState);
     try {
+      console.log('Sending POST request to save-user-data');
       const response = await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
         headers: {
@@ -136,18 +140,21 @@ function App() {
         }),
       });
 
+      console.log('Received response from save-user-data:', response);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('Save response:', result);
+      console.log('Save response data:', result);
       
       // Update lastSavedStateRef
       lastSavedStateRef.current = {
         cookies: currentState.cookies_collected,
         buildings: gameState.buildings,
       };
+      console.log('Updated lastSavedStateRef:', lastSavedStateRef.current);
     } catch (error) {
       console.error('Error saving user data:', error.message);
     }
@@ -156,13 +163,17 @@ function App() {
   useEffect(() => {
     let saveInterval;
     if (userId) {
+      console.log('Setting up save interval');
       saveInterval = setInterval(() => {
-        console.log('Triggering save...');
+        console.log('Save interval triggered');
         saveUserData();
       }, 5000);
     }
     return () => {
-      if (saveInterval) clearInterval(saveInterval);
+      if (saveInterval) {
+        console.log('Clearing save interval');
+        clearInterval(saveInterval);
+      }
     };
   }, [userId, saveUserData]);
 
@@ -210,6 +221,8 @@ function App() {
 
     return () => clearInterval(gameLoop);
   }, []);
+
+  console.log('App rendered, userId:', userId);
 
   return (
     <GameContext.Provider value={{ 
