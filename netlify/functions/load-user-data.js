@@ -26,8 +26,8 @@ exports.handler = async (event) => {
 
     if (rows.length === 0) {
       return {
-        statusCode: 404,
-        body: JSON.stringify({ error: 'User not found' }),
+        statusCode: 200,
+        body: JSON.stringify({ gameState: null }),
       };
     }
 
@@ -36,11 +36,10 @@ exports.handler = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         gameState: {
-          cookies: userData.cookies_collected,
-          buildings: JSON.parse(userData.buildings_data),
-          // ... other game state properties
+          cookies_collected: userData.cookies_collected,
+          buildings_data: userData.buildings_data,
+          achievements: userData.achievements,
         },
-        achievements: JSON.parse(userData.achievements),
       }),
     };
   } catch (error) {
