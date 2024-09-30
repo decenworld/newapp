@@ -34,6 +34,7 @@ function App() {
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveAttemptRef = useRef(Date.now());
+  const saveTimeoutRef = useRef(null);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -124,34 +125,35 @@ function App() {
     }
   }, [userId, gameState, unlockedAchievements]);
 
-  // Add this effect to call saveGame every 5 seconds, regardless of userId
-  useEffect(() => {
-    const saveInterval = setInterval(() => {
-      console.log('Triggering scheduled save...');
+  const scheduleSave = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
       saveGame();
+      saveTimeoutRef.current = null;
     }, 5000);
-
-    return () => clearInterval(saveInterval);
   }, [saveGame]);
 
-  // Add this effect to save the game when the component unmounts
+  useEffect(() => {
+    if (userId) {
+      scheduleSave();
+    }
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [userId, gameState, unlockedAchievements, scheduleSave]);
+
   useEffect(() => {
     return () => {
-      console.log('Saving game before unmount...');
-      saveGame();
+      if (userId) {
+        console.log('Saving game before unmount...');
+        saveGame();
+      }
     };
-  }, [saveGame]);
-
-  // Add this effect to save the game when the window is about to unload
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      console.log('Saving game before unload...');
-      saveGame();
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [saveGame]);
+  }, [userId, saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -240,7 +242,7 @@ function App() {
       unlockedAchievements,
       clickCookie,
       buyBuilding,
-      saveGame,
+      saveGame: scheduleSave, // Change this to scheduleSave
       saveError: saveErrorRef.current,
       loadError: null,
       isOffline: isOfflineRef.current
