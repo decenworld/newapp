@@ -99,10 +99,10 @@ function App() {
         setGameState(prevState => ({
           ...prevState,
           cookies: data.cookies_collected,
-          buildings: data.buildings_data,
-          cps: calculateTotalCps(data.buildings_data),
+          buildings: JSON.parse(data.buildings_data),
+          cps: calculateTotalCps(JSON.parse(data.buildings_data)),
         }));
-        setUnlockedAchievements(data.achievements || []);
+        setUnlockedAchievements(JSON.parse(data.achievements) || []);
       }
       setLoadError(null);
       setIsOffline(false);
@@ -111,6 +111,8 @@ function App() {
       console.error('Failed to load game:', error);
       setLoadError(error.message);
       setIsOffline(!navigator.onLine);
+    } finally {
+      gameLoaded.current = true;
     }
   }, [userId, calculateTotalCps]);
 
