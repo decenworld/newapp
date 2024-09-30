@@ -2,15 +2,15 @@ const mariadb = require('mariadb');
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT, 10),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
-  connectTimeout: 20000,  // Increased to 20 seconds
-  acquireTimeout: 20000,  // Increased to 20 seconds
-  idleTimeout: 60000,     // Added idle timeout
+  connectTimeout: 30000,  // Increased to 30 seconds
+  acquireTimeout: 30000,  // Increased to 30 seconds
+  idleTimeout: 60000,
   multipleStatements: true,
-  trace: true,            // Enable tracing for debugging
 });
 
 exports.handler = async (event, context) => {
@@ -46,15 +46,18 @@ exports.handler = async (event, context) => {
     conn = await pool.getConnection();
     console.log('Database connection established');
 
+    // Check if user exists
     const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
     
     let result;
     if (existingUser && existingUser.length > 0) {
+      // Update existing user
       result = await conn.query(
         'UPDATE user_data SET cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?',
         [cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements), userId]
       );
     } else {
+      // Create new user
       result = await conn.query(
         'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
         [userId, cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements)]

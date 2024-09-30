@@ -51,63 +51,6 @@ function App() {
     }
   }, []);
 
-  const loadGame = useCallback(async (retryCount = 0) => {
-    if (!userId) {
-      console.log('No userId available, skipping load');
-      return;
-    }
-
-    try {
-      console.log('Attempting to load game state for user:', userId);
-      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to load game');
-      }
-
-      console.log('Loaded game state:', data);
-
-      if (data.cookies_collected === undefined || !Array.isArray(data.buildings_data)) {
-        throw new Error('Invalid data structure received');
-      }
-
-      const loadedBuildings = data.buildings_data.map((building, index) => ({
-        ...initialGameState.buildings[index],
-        ...building,
-      }));
-
-      setGameState(prevState => ({
-        ...prevState,
-        cookies: data.cookies_collected,
-        buildings: loadedBuildings,
-        cps: calculateTotalCps(loadedBuildings),
-      }));
-      setUnlockedAchievements(data.achievements || []);
-      setLoadError(null);
-    } catch (error) {
-      console.error('Failed to load game:', error);
-      setLoadError(error.message);
-      
-      if (retryCount < 3) {
-        console.log(`Retrying load... Attempt ${retryCount + 1}`);
-        setTimeout(() => loadGame(retryCount + 1), 5000);
-      } else {
-        console.error('Max retries reached. Unable to load game data.');
-        // Here you might want to set some default state or show an error message to the user
-      }
-    }
-  }, [userId, calculateTotalCps]);
-
-  useEffect(() => {
-    if (userId) {
-      loadGame();
-    }
-  }, [userId, loadGame]);
-
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
   const saveGame = useCallback(async (force = false, retryCount = 0) => {
     if (!force && Date.now() - lastSaveTime < 5000) {
       return; // Don't save if less than 5 seconds have passed since the last save
@@ -164,12 +107,62 @@ function App() {
     }
   }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
+  const loadGame = useCallback(async (retryCount = 0) => {
+    if (!userId) {
+      console.log('No userId available, skipping load');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setGameState(prevState => ({
+        ...prevState,
+        cookies: data.cookies_collected,
+        buildings: data.buildings_data,
+      }));
+      setUnlockedAchievements(data.achievements || []);
+      setLoadError(null);
+      setIsOffline(false);
+
+      if (data.newUser) {
+        console.log('New user created');
+        // You might want to trigger some action here for new users
+      }
+    } catch (error) {
+      console.error('Failed to load game:', error);
+      setLoadError(error.message);
+
+      if (error.message.includes('timeout') || error.message.includes('network')) {
+        setIsOffline(true);
+      }
+
+      if (retryCount < 3) {
+        console.log(`Retrying load... Attempt ${retryCount + 1}`);
+        setTimeout(() => loadGame(retryCount + 1), 5000 * (retryCount + 1)); // Exponential backoff
+      } else {
+        console.error('Max retries reached. Unable to load game data.');
+      }
+    }
+  }, [userId]);
+
   useEffect(() => {
     if (userId) {
+      loadGame();
       const saveInterval = setInterval(() => saveGame(true), 5000); // Force save every 5 seconds
       return () => clearInterval(saveInterval);
     }
-  }, [userId, saveGame]);
+  }, [userId, loadGame, saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -253,11 +246,11 @@ function App() {
       buyBuilding,
       saveGame,
       saveError,
+      loadError,
       isOffline
     }}>
-      {saveError && <div className="error-message">Error saving game: {saveError}</div>}
+      {(saveError || loadError) && <div className="error-message">Error: {saveError || loadError}</div>}
       {isOffline && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
-      {loadError && <div className="error-message">Error loading game: {loadError}</div>}
       <div className="App">
         <Game />
         <button onClick={() => window.open('/.netlify/functions/download-data', '_blank')}>

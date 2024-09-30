@@ -2,12 +2,15 @@ const mariadb = require('mariadb');
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT, 10),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
-  connectTimeout: 10000,
-  acquireTimeout: 10000,
+  connectTimeout: 30000,  // Increased to 30 seconds
+  acquireTimeout: 30000,  // Increased to 30 seconds
+  idleTimeout: 60000,
+  multipleStatements: true,
 });
 
 const defaultGameState = {
@@ -35,36 +38,56 @@ exports.handler = async (event, context) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const rows = await conn.query('SELECT cookies_collected, buildings_data, achievements FROM user_data WHERE user_id = ?', [userId]);
+    console.log('Database connection established');
+
+    // Check if user exists
+    const [existingUser] = await conn.query('SELECT * FROM user_data WHERE user_id = ?', [userId]);
     
-    if (rows.length === 0) {
-      // Create default data for new user
+    if (!existingUser || existingUser.length === 0) {
+      // Create new user with default state
       await conn.query(
         'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
         [userId, defaultGameState.cookies_collected, JSON.stringify(defaultGameState.buildings_data), JSON.stringify(defaultGameState.achievements)]
       );
       return {
         statusCode: 200,
-        body: JSON.stringify(defaultGameState),
+        body: JSON.stringify({
+          ...defaultGameState,
+          newUser: true
+        }),
       };
     }
 
-    const userData = rows[0];
+    // Return existing user data
     return {
       statusCode: 200,
       body: JSON.stringify({
-        cookies_collected: userData.cookies_collected,
-        buildings_data: JSON.parse(userData.buildings_data),
-        achievements: JSON.parse(userData.achievements),
+        cookies_collected: existingUser.cookies_collected,
+        buildings_data: JSON.parse(existingUser.buildings_data),
+        achievements: JSON.parse(existingUser.achievements),
+        newUser: false
       }),
     };
   } catch (error) {
-    console.error('Error loading data:', error);
+    console.error('Error details:', error);
+    if (error.code === 'ER_GET_CONNECTION_TIMEOUT' || error.code === 'ER_CONNECTION_TIMEOUT') {
+      return {
+        statusCode: 503,
+        body: JSON.stringify({ error: 'Database connection timeout. Please try again later.' })
+      };
+    }
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to load data', details: error.message, stack: error.stack })
+      body: JSON.stringify({ error: 'Failed to load data', details: error.message, code: error.code })
     };
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      try {
+        await conn.end();
+        console.log('Database connection closed');
+      } catch (err) {
+        console.error('Error closing database connection:', err);
+      }
+    }
   }
 };
