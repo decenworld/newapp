@@ -43,7 +43,7 @@ function App() {
   const [loadError, setLoadError] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(0);
-  const loadAttempts = useRef(0);
+  const gameLoaded = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -87,10 +87,36 @@ function App() {
     initTelegram();
   }, []);
 
+  const loadGame = useCallback(async () => {
+    if (!userId || gameLoaded.current) return;
+
+    try {
+      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
+      if (!response.ok) throw new Error('Failed to load game');
+
+      const data = await response.json();
+      setGameState(prevState => ({
+        ...prevState,
+        cookies: data.cookies_collected,
+        buildings: data.buildings_data,
+        cps: calculateTotalCps(data.buildings_data),
+      }));
+      setUnlockedAchievements(data.achievements || []);
+      setLoadError(null);
+      setIsOffline(false);
+      gameLoaded.current = true;
+    } catch (error) {
+      console.error('Failed to load game:', error);
+      setLoadError(error.message);
+      setIsOffline(!navigator.onLine);
+    }
+  }, [userId, calculateTotalCps]);
+
   const saveGame = useCallback(async () => {
     if (!userId || Date.now() - lastSaveTime < 5000) return;
 
     const currentState = {
+      userId,
       cookies_collected: Math.floor(gameState.cookies),
       buildings_data: gameState.buildings,
       achievements: unlockedAchievements,
@@ -100,7 +126,7 @@ function App() {
       const response = await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, ...currentState }),
+        body: JSON.stringify(currentState),
       });
 
       if (!response.ok) throw new Error('Failed to save game');
@@ -118,39 +144,18 @@ function App() {
     }
   }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
-  const loadGame = useCallback(async () => {
-    if (!userId || loadAttempts.current >= 2) return;
-
-    try {
-      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      if (!response.ok) throw new Error('Failed to load game');
-
-      const data = await response.json();
-      setGameState(prevState => ({
-        ...prevState,
-        cookies: data.cookies_collected,
-        buildings: data.buildings_data,
-        cps: calculateTotalCps(data.buildings_data),
-      }));
-      setUnlockedAchievements(data.achievements || []);
-      setLoadError(null);
-      setIsOffline(false);
-    } catch (error) {
-      console.error('Failed to load game:', error);
-      setLoadError(error.message);
-      setIsOffline(!navigator.onLine);
-    } finally {
-      loadAttempts.current += 1;
+  useEffect(() => {
+    if (userId && !gameLoaded.current) {
+      loadGame();
     }
-  }, [userId, calculateTotalCps]);
+  }, [userId, loadGame]);
 
   useEffect(() => {
     if (userId) {
-      loadGame();
       const saveInterval = setInterval(saveGame, 5000);
       return () => clearInterval(saveInterval);
     }
-  }, [userId, loadGame, saveGame]);
+  }, [userId, saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
