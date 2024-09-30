@@ -118,15 +118,15 @@ function App() {
     if (!userId) return;
 
     const currentState = {
-      cookies: Math.floor(gameState.cookies),
-      buildings: gameState.buildings,
+      cookies_collected: Math.floor(gameState.cookies),
+      buildings_data: JSON.stringify(gameState.buildings),
     };
 
     const lastSavedState = lastSavedStateRef.current;
 
     if (
-      currentState.cookies !== lastSavedState.cookies ||
-      JSON.stringify(currentState.buildings) !== JSON.stringify(lastSavedState.buildings)
+      currentState.cookies_collected !== lastSavedState.cookies ||
+      currentState.buildings_data !== JSON.stringify(lastSavedState.buildings)
     ) {
       console.log('Saving game state:', currentState);
       try {
@@ -137,8 +137,8 @@ function App() {
           },
           body: JSON.stringify({
             userId,
-            cookies: currentState.cookies,
-            buildings: currentState.buildings,
+            cookies_collected: currentState.cookies_collected,
+            buildings_data: currentState.buildings_data,
           }),
         });
 
@@ -147,11 +147,16 @@ function App() {
           throw new Error(`Failed to save user data: ${errorData.error || response.statusText}`);
         }
 
-        lastSavedStateRef.current = currentState;
+        const responseData = await response.json();
+        console.log('Save response:', responseData);
+
+        lastSavedStateRef.current = {
+          cookies: currentState.cookies_collected,
+          buildings: gameState.buildings,
+        };
         console.log('Game state saved successfully for user:', userId);
       } catch (error) {
         console.error('Error saving user data:', error.message);
-        // You might want to implement a retry mechanism here
       }
     } else {
       console.log('No changes detected, skipping save');

@@ -43,12 +43,12 @@ exports.handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
-  const { userId, cookies, buildings } = data;
+  const { userId, cookies_collected, buildings_data } = data;
   console.log('Attempting to save data for user:', userId);
-  console.log('Cookies:', cookies);
-  console.log('Buildings:', buildings);
+  console.log('Cookies collected:', cookies_collected);
+  console.log('Buildings data:', buildings_data);
 
-  if (!userId || cookies === undefined || !buildings) {
+  if (!userId || cookies_collected === undefined || !buildings_data) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Missing required data' }) };
   }
 
@@ -61,15 +61,15 @@ exports.handler = async (event, context) => {
     await createTableIfNotExists(conn);
 
     console.log('Executing query to save user data...');
-    await conn.query(
+    const result = await conn.query(
       'INSERT INTO user_data (user_id, cookies_collected, buildings_data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?',
-      [userId, cookies, JSON.stringify(buildings), cookies, JSON.stringify(buildings)]
+      [userId, cookies_collected, buildings_data, cookies_collected, buildings_data]
     );
-    console.log('User data saved successfully');
+    console.log('User data saved successfully', result);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Data saved successfully' })
+      body: JSON.stringify({ message: 'Data saved successfully', result })
     };
   } catch (err) {
     console.error('Database error:', err);
