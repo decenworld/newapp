@@ -29,6 +29,7 @@ function App() {
   const [gameState, setGameState] = useState(initialGameState);
   const [userId, setUserId] = useState(null);
   const lastSavedStateRef = useRef({ cookies: 0, buildings: initialGameState.buildings });
+  const saveUserDataRef = useRef(null);
 
   useEffect(() => {
     const initApp = () => {
@@ -114,7 +115,7 @@ function App() {
     }
   }, [userId, loadUserData]);
 
-  const saveUserData = useCallback(async () => {
+  saveUserDataRef.current = async () => {
     if (!userId) {
       console.log('No userId available, skipping save');
       return;
@@ -149,7 +150,6 @@ function App() {
       const result = await response.json();
       console.log('Save response data:', result);
       
-      // Update lastSavedStateRef
       lastSavedStateRef.current = {
         cookies: currentState.cookies_collected,
         buildings: gameState.buildings,
@@ -158,7 +158,7 @@ function App() {
     } catch (error) {
       console.error('Error saving user data:', error.message);
     }
-  }, [gameState, userId]);
+  };
 
   useEffect(() => {
     let saveInterval;
@@ -166,7 +166,7 @@ function App() {
       console.log('Setting up save interval');
       saveInterval = setInterval(() => {
         console.log('Save interval triggered');
-        saveUserData();
+        saveUserDataRef.current();
       }, 5000);
     }
     return () => {
@@ -175,7 +175,7 @@ function App() {
         clearInterval(saveInterval);
       }
     };
-  }, [userId, saveUserData]);
+  }, [userId]);
 
   const clickCookie = useCallback(() => {
     setGameState(prevState => ({
