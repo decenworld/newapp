@@ -104,6 +104,8 @@ function App() {
     }
   }, [userId, loadGame]);
 
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   const saveGame = useCallback(async (retryCount = 0) => {
     if (!userId) {
       console.log('No userId available, skipping save');
@@ -143,7 +145,8 @@ function App() {
       
       if (retryCount < 3) {
         console.log(`Retrying save... Attempt ${retryCount + 1}`);
-        setTimeout(() => saveGame(retryCount + 1), 5000);
+        await sleep(5000); // Wait 5 seconds before retrying
+        saveGame(retryCount + 1);
       } else {
         console.error('Max retries reached. Unable to save game data.');
       }
@@ -154,7 +157,7 @@ function App() {
     let saveInterval;
     if (userId) {
       saveGame(); // Initial save when userId is set
-      saveInterval = setInterval(saveGame, 5000); // Save every 5 seconds
+      saveInterval = setInterval(saveGame, 60000); // Save every 60 seconds instead of 5
     }
     return () => {
       if (saveInterval) clearInterval(saveInterval);

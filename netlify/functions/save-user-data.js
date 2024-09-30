@@ -22,6 +22,7 @@ exports.handler = async (event, context) => {
   try {
     data = JSON.parse(event.body);
   } catch (error) {
+    console.error('Error parsing request body:', error);
     return {
       statusCode: 400,
       body: JSON.stringify({ error: 'Invalid JSON in request body' })
@@ -29,6 +30,13 @@ exports.handler = async (event, context) => {
   }
 
   const { userId, cookies_collected, buildings_data, achievements } = data;
+
+  if (!userId) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: 'userId is required' })
+    };
+  }
 
   let conn;
   try {
@@ -62,7 +70,7 @@ exports.handler = async (event, context) => {
     console.error('Error saving data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message })
+      body: JSON.stringify({ error: 'Failed to save data', details: error.message, stack: error.stack })
     };
   } finally {
     if (conn) conn.release();
