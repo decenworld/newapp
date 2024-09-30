@@ -26,12 +26,22 @@ const initialGameState = {
 };
 
 function App() {
-  const [gameState, setGameState] = useState(initialGameState);
   const [userId, setUserId] = useState(null);
+  const [gameState, setGameState] = useState({
+    cookies: 0,
+    buildings: [
+      { name: "Cursor", baseCost: 15, baseCps: 0.1, count: 0 },
+      { name: "Grandma", baseCost: 100, baseCps: 1, count: 0 },
+      { name: "Farm", baseCost: 1100, baseCps: 8, count: 0 },
+      { name: "Mine", baseCost: 12000, baseCps: 47, count: 0 },
+      { name: "Factory", baseCost: 130000, baseCps: 260, count: 0 },
+    ],
+    cps: 0,
+  });
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
-  const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
-  const [lastSaveTime, setLastSaveTime] = useState(Date.now());
+  const [loadError, setLoadError] = useState(null);
+  const [lastSaveTime, setLastSaveTime] = useState(0);
   const [isOffline, setIsOffline] = useState(false);
 
   // Add this function to calculate total CPS
@@ -40,26 +50,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Set userId here, e.g., from localStorage or a login process
-    const storedUserId = localStorage.getItem('userId');
-    if (storedUserId) {
-      setUserId(storedUserId);
-    } else {
-      const newUserId = 'user_' + Date.now(); // Generate a simple userId
-      localStorage.setItem('userId', newUserId);
-      setUserId(newUserId);
+    const tgApp = window.Telegram.WebApp;
+    if (tgApp.initDataUnsafe && tgApp.initDataUnsafe.user) {
+      setUserId(tgApp.initDataUnsafe.user.id.toString());
     }
   }, []);
 
-  const saveGame = useCallback(async (force = false, retryCount = 0) => {
-    if (!force && Date.now() - lastSaveTime < 5000) {
-      return; // Don't save if less than 5 seconds have passed since the last save
-    }
-
-    if (!userId) {
-      console.log('No userId available, skipping save');
-      return;
-    }
+  const saveGame = useCallback(async () => {
+    if (!userId || Date.now() - lastSaveTime < 5000) return;
 
     const currentState = {
       cookies_collected: Math.floor(gameState.cookies),
@@ -67,69 +65,38 @@ function App() {
       achievements: unlockedAchievements,
     };
 
-    console.log('Attempting to save game state:', currentState);
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          ...currentState,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, ...currentState }),
       });
 
-      const result = await response.json();
+      if (!response.ok) throw new Error('Failed to save game');
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to save game');
-      }
-
-      console.log('Save result:', result);
-      setSaveError(null);
       setLastSaveTime(Date.now());
+      setSaveError(null);
       setIsOffline(false);
     } catch (error) {
       console.error('Error saving user data:', error);
       setSaveError(error.message);
-
-      if (error.message.includes('timeout') || error.message.includes('network')) {
-        setIsOffline(true);
-      }
-
-      if (retryCount < 3) {
-        console.log(`Retrying save... Attempt ${retryCount + 1}`);
-        setTimeout(() => saveGame(true, retryCount + 1), 5000 * (retryCount + 1)); // Exponential backoff
-      } else {
-        console.error('Max retries reached. Unable to save game data.');
-      }
+      setIsOffline(!navigator.onLine);
     }
   }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
-  const loadGame = useCallback(async (retryCount = 0) => {
-    if (!userId) {
-      console.log('No userId available, skipping load');
-      return;
-    }
+  const loadGame = useCallback(async () => {
+    if (!userId) return;
 
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error('Failed to load game');
 
       const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
       setGameState(prevState => ({
         ...prevState,
         cookies: data.cookies_collected,
         buildings: data.buildings_data,
+        cps: calculateTotalCps(data.buildings_data),
       }));
       setUnlockedAchievements(data.achievements || []);
       setLoadError(null);
