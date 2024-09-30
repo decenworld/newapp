@@ -1,12 +1,11 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import Game from './components/Game';
-import { achievements } from './achievements';
+import { achievements } from './achievements';  // Make sure this path is correct
 
 export const GameContext = createContext();
 
 const initialGameState = {
   cookies: 0,
-  cps: 0,
   buildings: [
     { name: "Cursor", baseCost: 15, baseCps: 0.1, count: 0 },
     { name: "Grandma", baseCost: 100, baseCps: 1, count: 0 },
@@ -30,65 +29,49 @@ function App() {
   const [userId, setUserId] = useState(null);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
 
-  const calculateTotalCps = useCallback((buildings) => {
-    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
-  }, []);
-
   useEffect(() => {
-    const initApp = () => {
-      console.log("Initializing App...");
-      
-      const urlParams = new URLSearchParams(window.location.hash.slice(1));
-      const tgWebAppData = urlParams.get('tgWebAppData');
-      
-      console.log("URL parameters:", urlParams.toString());
-      console.log("tgWebAppData:", tgWebAppData);
-
-      if (tgWebAppData) {
-        try {
-          const webAppData = new URLSearchParams(tgWebAppData);
-          console.log("Parsed WebAppData:", Object.fromEntries(webAppData));
-
-          const userString = webAppData.get('user');
-          if (userString) {
-            const user = JSON.parse(decodeURIComponent(userString));
-            setUserId(user.id.toString());
-            console.log("User ID set from URL data:", user.id);
-          } else {
-            console.error("User data not found in WebAppData");
-          }
-        } catch (error) {
-          console.error("Error parsing WebAppData:", error);
-        }
-      } else {
-        console.error("No WebAppData found in URL");
-      }
-    };
-
-    initApp();
-  }, []);
-
-  const checkAchievements = useCallback(() => {
-    const newAchievements = achievements.filter(
-      achievement => !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState)
-    );
-
-    if (newAchievements.length > 0) {
-      setUnlockedAchievements(prev => [...prev, ...newAchievements.map(a => a.id)]);
-      // Here you could also trigger notifications or animations for new achievements
+    // Set userId here, e.g., from localStorage or a login process
+    const storedUserId = localStorage.getItem('userId');
+    if (storedUserId) {
+      setUserId(storedUserId);
+    } else {
+      const newUserId = 'user_' + Date.now(); // Generate a simple userId
+      localStorage.setItem('userId', newUserId);
+      setUserId(newUserId);
     }
-  }, [gameState, unlockedAchievements]);
+  }, []);
 
-  useEffect(() => {
-    checkAchievements();
-  }, [gameState, checkAchievements]);
+  const loadGame = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
+      if (!response.ok) {
+        throw new Error('Failed to load game data');
+      }
+      const data = await response.json();
+      setGameState(prevState => ({
+        ...prevState,
+        cookies: data.cookies_collected || 0,
+        buildings: data.buildings_data || initialGameState.buildings,
+      }));
+      setUnlockedAchievements(data.achievements || []);
+    } catch (error) {
+      console.error('Failed to load game:', error);
+    }
+  }, [userId]);
 
   const saveGame = useCallback(async () => {
+    if (!userId) return;
+
     try {
       await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          userId: userId,
+          userId,
           cookies_collected: gameState.cookies,
           buildings_data: gameState.buildings,
           achievements: unlockedAchievements,
@@ -97,31 +80,32 @@ function App() {
     } catch (error) {
       console.error('Failed to save game:', error);
     }
-  }, [gameState, unlockedAchievements, userId]);
-
-  const loadGame = useCallback(async () => {
-    try {
-      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      const data = await response.json();
-      setGameState(prevState => ({
-        ...prevState,
-        cookies: data.cookies_collected,
-        buildings: data.buildings_data,
-        cps: calculateTotalCps(data.buildings_data),
-      }));
-      setUnlockedAchievements(data.achievements || []);
-    } catch (error) {
-      console.error('Failed to load game:', error);
-    }
-  }, [userId, calculateTotalCps]);
+  }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
     if (userId) {
       loadGame();
-      const saveInterval = setInterval(saveGame, 60000); // Save every minute
-      return () => clearInterval(saveInterval);
     }
-  }, [userId, loadGame, saveGame]);
+  }, [userId, loadGame]);
+
+  useEffect(() => {
+    const saveInterval = setInterval(saveGame, 60000); // Save every minute
+    return () => clearInterval(saveInterval);
+  }, [saveGame]);
+
+  const checkAchievements = useCallback(() => {
+    const newAchievements = achievements.filter(
+      achievement => !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState)
+    );
+
+    if (newAchievements.length > 0) {
+      setUnlockedAchievements(prev => [...prev, ...newAchievements.map(a => a.id)]);
+    }
+  }, [gameState, unlockedAchievements]);
+
+  useEffect(() => {
+    checkAchievements();
+  }, [gameState, checkAchievements]);
 
   const clickCookie = useCallback(() => {
     setGameState(prevState => ({
