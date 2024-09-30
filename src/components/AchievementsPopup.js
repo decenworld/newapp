@@ -1,48 +1,22 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext } from 'react';
 import { GameContext } from '../App';
+import { achievements } from '../achievements';
 
 const AchievementsPopup = ({ onClose }) => {
-  const { gameState } = useContext(GameContext);
-  const [selectedAchievement, setSelectedAchievement] = useState(null);
-
-  // This is a placeholder. You should define your achievements list somewhere appropriate in your app.
-  const achievements = [
-    { id: 0, name: "Wake and bake", description: "Bake 1 cookie in one ascension.", icon: "wake_and_bake.png", condition: (state) => state.cookies >= 1 },
-    { id: 1, name: "Making some dough", description: "Bake 1,000 cookies in one ascension.", icon: "making_some_dough.png", condition: (state) => state.cookies >= 1000 },
-    // Add more achievements here
-  ];
-
-  const showAchievementDescription = (achievement) => {
-    setSelectedAchievement(achievement);
-  };
+  const { unlockedAchievements } = useContext(GameContext);
 
   return (
-    <div className="popup">
-      <div className="popup-header">
-        Achievements
-        <span className="popup-close" onClick={onClose}>&times;</span>
-      </div>
-      <div id="achievements-grid">
+    <div className="achievements-popup">
+      <h2>Achievements</h2>
+      <ul>
         {achievements.map(achievement => (
-          <div 
-            key={achievement.id} 
-            className="achievement-item"
-            onClick={() => showAchievementDescription(achievement)}
-          >
-            {gameState.unlockedAchievements.includes(achievement.id) ? (
-              <img src={achievement.icon} alt={achievement.name} />
-            ) : (
-              <img src="locked_achievement.png" alt="Locked" />
-            )}
-          </div>
+          <li key={achievement.id} className={unlockedAchievements.includes(achievement.id) ? 'unlocked' : 'locked'}>
+            <h3>{achievement.name}</h3>
+            <p>{achievement.description}</p>
+          </li>
         ))}
-      </div>
-      {selectedAchievement && (
-        <div id="achievement-description-popup">
-          <h3>{selectedAchievement.name}</h3>
-          <p>{selectedAchievement.description}</p>
-        </div>
-      )}
+      </ul>
+      <button onClick={onClose}>Close</button>
     </div>
   );
 };

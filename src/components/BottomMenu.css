@@ -1,0 +1,37 @@
+.bottom-menu {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #333; /* Dark gray background */
+  padding: 10px 0;
+}
+
+.bottom-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  color: white; /* White text for better contrast */
+}
+
+.menu-icon {
+  font-size: 24px; /* Adjusted size */
+  margin-bottom: 5px;
+}
+
+.cookie-icon {
+  width: 28px; /* Adjusted size */
+  height: 28px; /* Adjusted size */
+}
+
+.bottom-menu button span:not(.menu-icon) {
+  font-size: 12px;
+  text-align: center;
+}

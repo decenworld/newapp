@@ -1,5 +1,6 @@
-import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import Game from './components/Game';
+import { achievements } from './achievements';
 
 export const GameContext = createContext();
 
@@ -22,14 +23,12 @@ const initialGameState = {
     research: Array(3).fill(false),
     unshackled: Array(20).fill(false),
   },
-  unlockedAchievements: [],
 };
 
 function App() {
   const [gameState, setGameState] = useState(initialGameState);
   const [userId, setUserId] = useState(null);
-  const lastSavedStateRef = useRef({ cookies: 0, buildings: initialGameState.buildings });
-  const saveUserDataRef = useRef(null);
+  const [unlockedAchievements, setUnlockedAchievements] = useState([]);
 
   const calculateTotalCps = useCallback((buildings) => {
     return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
@@ -69,125 +68,60 @@ function App() {
     initApp();
   }, []);
 
-  const loadUserData = useCallback(async () => {
-    if (!userId) {
-      console.log("No userId available, skipping data load");
-      return;
+  const checkAchievements = useCallback(() => {
+    const newAchievements = achievements.filter(
+      achievement => !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState)
+    );
+
+    if (newAchievements.length > 0) {
+      setUnlockedAchievements(prev => [...prev, ...newAchievements.map(a => a.id)]);
+      // Here you could also trigger notifications or animations for new achievements
     }
+  }, [gameState, unlockedAchievements]);
 
-    console.log("Attempting to load user data for userId:", userId);
+  useEffect(() => {
+    checkAchievements();
+  }, [gameState, checkAchievements]);
 
+  const saveGame = useCallback(async () => {
+    try {
+      await fetch('/.netlify/functions/save-user-data', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: userId,
+          cookies_collected: gameState.cookies,
+          buildings_data: gameState.buildings,
+          achievements: unlockedAchievements,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to save game:', error);
+    }
+  }, [gameState, unlockedAchievements, userId]);
+
+  const loadGame = useCallback(async () => {
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      console.log("Load user data response:", response);
-
-      if (response.status === 404) {
-        console.log("No saved data found for user, using initial game state");
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to load user data: ${response.status} ${response.statusText}`);
-      }
-
-      const savedData = await response.json();
-      console.log("Loaded user data:", savedData);
-
-      if (savedData && savedData.cookies_collected !== undefined && savedData.buildings_data) {
-        const parsedBuildings = JSON.parse(savedData.buildings_data);
-        const calculatedCps = calculateTotalCps(parsedBuildings);
-        
-        setGameState(prevState => ({
-          ...prevState,
-          cookies: savedData.cookies_collected,
-          buildings: parsedBuildings.length ? parsedBuildings : prevState.buildings,
-          cps: calculatedCps,
-        }));
-        
-        lastSavedStateRef.current = {
-          cookies: savedData.cookies_collected,
-          buildings: parsedBuildings.length ? parsedBuildings : initialGameState.buildings,
-        };
-        console.log('Game state loaded successfully for user:', userId);
-        console.log('Calculated CPS:', calculatedCps);
-      } else {
-        console.log('Invalid or empty saved data, using initial game state for user:', userId);
-      }
+      const data = await response.json();
+      setGameState(prevState => ({
+        ...prevState,
+        cookies: data.cookies_collected,
+        buildings: data.buildings_data,
+        cps: calculateTotalCps(data.buildings_data),
+      }));
+      setUnlockedAchievements(data.achievements || []);
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('Failed to load game:', error);
     }
   }, [userId, calculateTotalCps]);
 
   useEffect(() => {
     if (userId) {
-      loadUserData();
+      loadGame();
+      const saveInterval = setInterval(saveGame, 60000); // Save every minute
+      return () => clearInterval(saveInterval);
     }
-  }, [userId, loadUserData]);
-
-  saveUserDataRef.current = async () => {
-    if (!userId) {
-      console.log('No userId available, skipping save');
-      return;
-    }
-
-    const currentState = {
-      cookies_collected: Math.floor(gameState.cookies),
-      buildings_data: JSON.stringify(gameState.buildings),
-    };
-
-    console.log('Attempting to save game state:', currentState);
-    try {
-      console.log('Sending POST request to save-user-data');
-      const response = await fetch('/.netlify/functions/save-user-data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          cookies_collected: currentState.cookies_collected,
-          buildings_data: currentState.buildings_data,
-        }),
-      });
-
-      console.log('Received response from save-user-data:', response);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response body:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('Save response data:', result);
-      
-      lastSavedStateRef.current = {
-        cookies: currentState.cookies_collected,
-        buildings: gameState.buildings,
-      };
-      console.log('Updated lastSavedStateRef:', lastSavedStateRef.current);
-    } catch (error) {
-      console.error('Error saving user data:', error.message);
-      console.error('Error details:', error);
-    }
-  };
-
-  useEffect(() => {
-    let saveInterval;
-    if (userId) {
-      console.log('Setting up save interval');
-      saveInterval = setInterval(() => {
-        console.log('Save interval triggered');
-        saveUserDataRef.current();
-      }, 5000);
-    }
-    return () => {
-      if (saveInterval) {
-        console.log('Clearing save interval');
-        clearInterval(saveInterval);
-      }
-    };
-  }, [userId]);
+  }, [userId, loadGame, saveGame]);
 
   const clickCookie = useCallback(() => {
     setGameState(prevState => ({
@@ -217,7 +151,7 @@ function App() {
       }
       return prevState;
     });
-  }, []);
+  }, [calculateTotalCps]);
 
   useEffect(() => {
     const gameLoop = setInterval(() => {
@@ -236,7 +170,8 @@ function App() {
     <GameContext.Provider value={{ 
       gameState, 
       clickCookie, 
-      buyBuilding
+      buyBuilding,
+      unlockedAchievements
     }}>
       <div className="App">
         <Game />

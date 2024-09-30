@@ -1,81 +1,48 @@
-const mariadb = require('mariadb');
+const mysql = require('mysql2/promise');
 
-const pool = mariadb.createPool({
-  host: process.env.DB_HOST, // Your public IP or domain
-  port: process.env.DB_PORT, // 33070
-  user: process.env.DB_USER, // 'steffan'
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  connectionLimit: 5,
-  connectTimeout: 30000,
-  acquireTimeout: 30000
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
-async function createTableIfNotExists(conn) {
-  try {
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS user_data (
-        user_id VARCHAR(255) PRIMARY KEY,
-        cookies_collected INT DEFAULT 0,
-        buildings_data JSON,
-        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('Table user_data created or already exists');
-  } catch (err) {
-    console.error('Error creating table:', err);
-    throw err;
-  }
-}
-
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 5000; // 5 seconds
-
-async function connectWithRetry(retries = MAX_RETRIES) {
-  try {
-    const conn = await pool.getConnection();
-    console.log('Connected to database successfully');
-    return conn;
-  } catch (err) {
-    if (retries > 0) {
-      console.log(`Connection failed. Retrying in ${RETRY_DELAY/1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-      return connectWithRetry(retries - 1);
-    } else {
-      throw err;
-    }
-  }
-}
-
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   const userId = event.queryStringParameters.userId;
 
-  let conn;
   try {
-    conn = await pool.getConnection();
-    const rows = await conn.query('SELECT cookies_collected, buildings_data FROM user_data WHERE user_id = ?', [userId]);
-    
-    if (rows.length > 0) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          cookies_collected: rows[0].cookies_collected,
-          buildings_data: rows[0].buildings_data
-        })
-      };
-    } else {
+    const connection = await pool.getConnection();
+
+    const [userData] = await connection.query(
+      'SELECT cookies_collected, buildings_data, achievements FROM user_data WHERE user_id = ?',
+      [userId]
+    );
+
+    connection.release();
+
+    if (userData.length === 0) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ message: 'User data not found' })
+        body: JSON.stringify({ message: 'User not found' }),
       };
     }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        cookies_collected: userData[0].cookies_collected,
+        buildings_data: JSON.parse(userData[0].buildings_data),
+        achievements: JSON.parse(userData[0].achievements),
+      }),
+    };
   } catch (error) {
-    console.error('Database error:', error);
+    console.error('Error loading data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to load user data' })
+      body: JSON.stringify({ error: 'Failed to load data' }),
     };
-  } finally {
-    if (conn) conn.release();
   }
 };
