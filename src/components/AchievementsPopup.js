@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { GameContext } from '../App';
-import { achievements } from '../achievements';
+import { achievements } from '../achievements';  // Updated import path
 
 const AchievementsPopup = ({ onClose }) => {
   const { unlockedAchievements } = useContext(GameContext);
