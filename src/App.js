@@ -80,13 +80,12 @@ function App() {
 
   const saveGame = useCallback(async () => {
     console.log('saveGame function called at:', new Date().toISOString());
-    if (!userId) {
-      console.error('Cannot save game: userId is not set');
-      return;
-    }
+    console.log('Current userId:', userId);
+    console.log('Current gameState:', JSON.stringify(gameState));
+    console.log('Current unlockedAchievements:', JSON.stringify(unlockedAchievements));
 
     const currentState = {
-      userId,
+      userId: userId || 'anonymous', // Use 'anonymous' if userId is not set
       cookies_collected: Math.floor(gameState.cookies),
       buildings_data: JSON.stringify(gameState.buildings),
       achievements: JSON.stringify(unlockedAchievements),
@@ -122,16 +121,34 @@ function App() {
     }
   }, [userId, gameState, unlockedAchievements]);
 
+  // Add this effect to call saveGame every 5 seconds, regardless of userId
   useEffect(() => {
-    if (userId) {
-      const saveInterval = setInterval(() => {
-        console.log('Triggering save game...');
-        saveGame();
-      }, 5000);
+    const saveInterval = setInterval(() => {
+      console.log('Triggering scheduled save...');
+      saveGame();
+    }, 5000);
 
-      return () => clearInterval(saveInterval);
-    }
-  }, [userId, saveGame]);
+    return () => clearInterval(saveInterval);
+  }, [saveGame]);
+
+  // Add this effect to save the game when the component unmounts
+  useEffect(() => {
+    return () => {
+      console.log('Saving game before unmount...');
+      saveGame();
+    };
+  }, [saveGame]);
+
+  // Add this effect to save the game when the window is about to unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      console.log('Saving game before unload...');
+      saveGame();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
