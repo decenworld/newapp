@@ -17,7 +17,7 @@ async function createTableIfNotExists(conn) {
       CREATE TABLE IF NOT EXISTS user_data (
         user_id VARCHAR(255) PRIMARY KEY,
         cookies_collected INT DEFAULT 0,
-        buildings_data JSON,
+        buildings_data LONGTEXT,
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
@@ -29,7 +29,7 @@ async function createTableIfNotExists(conn) {
 }
 
 exports.handler = async (event, context) => {
-  console.log('Received event:', event);
+  console.log('Received save request');
   
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -44,7 +44,7 @@ exports.handler = async (event, context) => {
   }
 
   const { userId, cookies_collected, buildings_data } = data;
-  console.log('Attempting to save data for user:', userId);
+  console.log('Saving data for user:', userId);
   console.log('Cookies collected:', cookies_collected);
   console.log('Buildings data:', buildings_data);
 
@@ -54,18 +54,16 @@ exports.handler = async (event, context) => {
 
   let conn;
   try {
-    console.log('Attempting to connect to database...');
     conn = await pool.getConnection();
-    console.log('Connected to database successfully');
+    console.log('Connected to database');
 
     await createTableIfNotExists(conn);
 
-    console.log('Executing query to save user data...');
     const result = await conn.query(
-      'INSERT INTO user_data (user_id, cookies_collected, buildings_data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?',
+      'INSERT INTO user_data (user_id, cookies_collected, buildings_data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?, last_updated = CURRENT_TIMESTAMP()',
       [userId, cookies_collected, buildings_data, cookies_collected, buildings_data]
     );
-    console.log('User data saved successfully', result);
+    console.log('Save result:', result);
 
     return {
       statusCode: 200,
@@ -78,9 +76,6 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({ error: 'Failed to save user data', details: err.message })
     };
   } finally {
-    if (conn) {
-      console.log('Closing database connection');
-      conn.release();
-    }
+    if (conn) conn.release();
   }
 };

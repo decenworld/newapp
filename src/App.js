@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import Game from './components/Game';
 
 export const GameContext = createContext();
@@ -122,7 +122,7 @@ function App() {
       buildings_data: JSON.stringify(gameState.buildings),
     };
 
-    console.log('Saving game state:', currentState);
+    console.log('Attempting to save game state:', currentState);
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
@@ -137,23 +137,22 @@ function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to save user data: ${errorData.error || response.statusText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const responseData = await response.json();
-      console.log('Save response:', responseData);
-
-      console.log('Game state saved successfully for user:', userId);
+      const result = await response.json();
+      console.log('Save response:', result);
     } catch (error) {
       console.error('Error saving user data:', error.message);
     }
   }, [gameState, userId]);
 
   useEffect(() => {
-    const saveInterval = setInterval(saveUserData, 5000); // Save every 5 seconds
-    return () => clearInterval(saveInterval);
-  }, [saveUserData]);
+    if (userId) {
+      const saveInterval = setInterval(saveUserData, 5000);
+      return () => clearInterval(saveInterval);
+    }
+  }, [userId, saveUserData]);
 
   const clickCookie = useCallback(() => {
     setGameState(prevState => ({
