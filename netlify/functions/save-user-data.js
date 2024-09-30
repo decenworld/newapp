@@ -7,10 +7,12 @@ const pool = mariadb.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
+  connectTimeout: 10000, // 10 seconds
+  acquireTimeout: 10000, // 10 seconds
 });
 
 exports.handler = async (event, context) => {
-  console.log('Save function called');
+  console.log('Save function called at:', new Date().toISOString());
   console.log('Event:', JSON.stringify(event));
 
   if (event.httpMethod !== 'POST') {

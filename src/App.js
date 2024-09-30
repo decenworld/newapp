@@ -39,10 +39,9 @@ function App() {
     cps: 0,
   });
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
-  const [saveError, setSaveError] = useState(null);
-  const [loadError, setLoadError] = useState(null);
-  const [isOffline, setIsOffline] = useState(false);
-  const lastSavedState = useRef(null);
+  const saveErrorRef = useRef(null);
+  const isOfflineRef = useRef(false);
+  const lastSaveAttemptRef = useRef(Date.now());
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -120,30 +119,34 @@ function App() {
       const result = JSON.parse(responseText);
       console.log('Save result:', result);
 
-      setSaveError(null);
-      setIsOffline(false);
+      saveErrorRef.current = null;
+      isOfflineRef.current = false;
     } catch (error) {
       console.error('Error saving user data:', error);
-      setSaveError(error.message);
-      setIsOffline(!navigator.onLine);
+      saveErrorRef.current = error.message;
+      isOfflineRef.current = !navigator.onLine;
+    } finally {
+      lastSaveAttemptRef.current = Date.now();
     }
   }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
-    const saveInterval = setInterval(() => {
-      console.log('Save interval triggered');
+    const forceSave = () => {
+      console.log('Force save triggered');
       saveGame();
-    }, 5000);
+    };
+
+    const saveInterval = setInterval(forceSave, 5000);
 
     return () => clearInterval(saveInterval);
   }, [saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
-      setIsOffline(false);
+      isOfflineRef.current = false;
       saveGame(true); // Attempt to save when coming back online
     };
-    const handleOffline = () => setIsOffline(true);
+    const handleOffline = () => isOfflineRef.current = true;
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -209,8 +212,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    console.log('App rendered, userId:', userId);
-  }, [userId]);
+    console.log('Current game state:', gameState);
+    console.log('Current achievements:', unlockedAchievements);
+    console.log('Last save attempt:', new Date(lastSaveAttemptRef.current).toISOString());
+    console.log('Is offline:', isOfflineRef.current);
+    console.log('Save error:', saveErrorRef.current);
+  }, [gameState, unlockedAchievements]);
+
+  console.log('App rendered, userId:', userId);
 
   return (
     <GameContext.Provider value={{ 
@@ -220,12 +229,12 @@ function App() {
       clickCookie,
       buyBuilding,
       saveGame,
-      saveError,
-      loadError,
-      isOffline
+      saveError: saveErrorRef.current,
+      loadError: null,
+      isOffline: isOfflineRef.current
     }}>
-      {(saveError || loadError) && <div className="error-message">Error: {saveError || loadError}</div>}
-      {isOffline && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
+      {(saveErrorRef.current) && <div className="error-message">Error: {saveErrorRef.current}</div>}
+      {isOfflineRef.current && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
       <div className="App">
         <Game />
         <button onClick={() => window.open('/.netlify/functions/download-data', '_blank')}>
