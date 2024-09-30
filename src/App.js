@@ -37,11 +37,13 @@ function App() {
       { name: "Factory", baseCost: 130000, baseCps: 260, count: 0 },
     ],
     cps: 0,
+    achievements: [],
   });
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveAttemptRef = useRef(Date.now());
+  const saveIntervalRef = useRef(null);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -97,7 +99,7 @@ function App() {
       userId,
       cookies_collected: Math.floor(gameState.cookies),
       buildings_data: JSON.stringify(gameState.buildings),
-      achievements: JSON.stringify(unlockedAchievements),
+      achievements: JSON.stringify(gameState.achievements),
     };
 
     console.log('Attempting to save game state:', JSON.stringify(currentState));
@@ -128,7 +130,7 @@ function App() {
     } finally {
       lastSaveAttemptRef.current = Date.now();
     }
-  }, [userId, gameState, unlockedAchievements]);
+  }, [userId, gameState]);
 
   useEffect(() => {
     const forceSave = () => {
@@ -136,11 +138,17 @@ function App() {
       saveGame().catch(error => console.error('Force save error:', error));
     };
 
-    const saveInterval = setInterval(forceSave, 5000);
+    if (saveIntervalRef.current) {
+      clearInterval(saveIntervalRef.current);
+    }
+
+    saveIntervalRef.current = setInterval(forceSave, 5000);
 
     return () => {
       console.log('Clearing save interval');
-      clearInterval(saveInterval);
+      if (saveIntervalRef.current) {
+        clearInterval(saveIntervalRef.current);
+      }
     };
   }, [saveGame]);
 
