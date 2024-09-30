@@ -91,7 +91,7 @@ function App() {
     if (!userId || Date.now() - lastSaveTime < 5000) return;
 
     const currentState = {
-      cookies_collected: Math.floor(gameState.cookies),
+      cookies_collected: Math.floor(gameState.cookies), // Ensure this is a number, not a BigInt
       buildings_data: gameState.buildings,
       achievements: unlockedAchievements,
     };

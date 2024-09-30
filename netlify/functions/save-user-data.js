@@ -2,43 +2,28 @@ const mariadb = require('mariadb');
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT, 10),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
-  connectTimeout: 30000,  // Increased to 30 seconds
-  acquireTimeout: 30000,  // Increased to 30 seconds
-  idleTimeout: 60000,
-  multipleStatements: true,
 });
 
 exports.handler = async (event, context) => {
   if (event.httpMethod !== 'POST') {
-    return { 
-      statusCode: 405, 
-      body: JSON.stringify({ error: 'Method Not Allowed' })
-    };
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
   let data;
   try {
     data = JSON.parse(event.body);
   } catch (error) {
-    console.error('Error parsing request body:', error);
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid JSON in request body' })
-    };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
   const { userId, cookies_collected, buildings_data, achievements } = data;
 
   if (!userId) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'userId is required' })
-    };
+    return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
   }
 
   let conn;
@@ -46,53 +31,31 @@ exports.handler = async (event, context) => {
     conn = await pool.getConnection();
     console.log('Database connection established');
 
-    // Check if user exists
     const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
     
-    let result;
     if (existingUser && existingUser.length > 0) {
-      // Update existing user
-      result = await conn.query(
+      await conn.query(
         'UPDATE user_data SET cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?',
         [cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements), userId]
       );
     } else {
-      // Create new user
-      result = await conn.query(
+      await conn.query(
         'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
         [userId, cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements)]
       );
     }
 
-    console.log('Save operation result:', result);
-
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
-        message: existingUser && existingUser.length > 0 ? 'Data updated successfully' : 'New user created and data saved',
-        result 
-      }),
+      body: JSON.stringify({ message: 'Data saved successfully' }),
     };
   } catch (error) {
-    console.error('Error details:', error);
-    if (error.code === 'ER_GET_CONNECTION_TIMEOUT' || error.code === 'ER_CONNECTION_TIMEOUT') {
-      return {
-        statusCode: 503,
-        body: JSON.stringify({ error: 'Database connection timeout. Please try again later.' })
-      };
-    }
+    console.error('Error saving data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message, code: error.code })
+      body: JSON.stringify({ error: 'Failed to save data', details: error.message })
     };
   } finally {
-    if (conn) {
-      try {
-        await conn.end();
-        console.log('Database connection closed');
-      } catch (err) {
-        console.error('Error closing database connection:', err);
-      }
-    }
+    if (conn) await conn.end();
   }
 };
