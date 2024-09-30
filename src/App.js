@@ -89,18 +89,19 @@ function App() {
       console.log("Loaded user data:", savedData);
 
       if (savedData && savedData.cookies_collected !== undefined && savedData.buildings_data) {
+        const parsedBuildings = JSON.parse(savedData.buildings_data);
         setGameState(prevState => ({
           ...prevState,
           cookies: savedData.cookies_collected,
-          buildings: JSON.parse(savedData.buildings_data),
+          buildings: parsedBuildings.length ? parsedBuildings : prevState.buildings,
         }));
         setLastSavedState({
           cookies: savedData.cookies_collected,
-          buildings: JSON.parse(savedData.buildings_data),
+          buildings: parsedBuildings.length ? parsedBuildings : initialGameState.buildings,
         });
         console.log('Game state loaded successfully for user:', userId);
       } else {
-        console.log('Invalid saved data format, using initial game state for user:', userId);
+        console.log('Invalid or empty saved data, using initial game state for user:', userId);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
