@@ -32,6 +32,7 @@ function App() {
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [lastSaveTime, setLastSaveTime] = useState(Date.now());
+  const [isOffline, setIsOffline] = useState(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -107,9 +108,8 @@ function App() {
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  const saveGame = useCallback(async (force = false) => {
-    const now = Date.now();
-    if (!force && now - lastSaveTime < 5000) {
+  const saveGame = useCallback(async (force = false, retryCount = 0) => {
+    if (!force && Date.now() - lastSaveTime < 5000) {
       return; // Don't save if less than 5 seconds have passed since the last save
     }
 
@@ -145,10 +145,22 @@ function App() {
 
       console.log('Save result:', result);
       setSaveError(null);
-      setLastSaveTime(now);
+      setLastSaveTime(Date.now());
+      setIsOffline(false);
     } catch (error) {
       console.error('Error saving user data:', error);
       setSaveError(error.message);
+
+      if (error.message.includes('timeout') || error.message.includes('network')) {
+        setIsOffline(true);
+      }
+
+      if (retryCount < 3) {
+        console.log(`Retrying save... Attempt ${retryCount + 1}`);
+        setTimeout(() => saveGame(true, retryCount + 1), 5000 * (retryCount + 1)); // Exponential backoff
+      } else {
+        console.error('Max retries reached. Unable to save game data.');
+      }
     }
   }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
@@ -158,6 +170,22 @@ function App() {
       return () => clearInterval(saveInterval);
     }
   }, [userId, saveGame]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      saveGame(true); // Attempt to save when coming back online
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [saveGame]);
 
   const checkAchievements = useCallback(() => {
     const newAchievements = achievements.filter(
@@ -224,9 +252,11 @@ function App() {
       clickCookie,
       buyBuilding,
       saveGame,
-      saveError
+      saveError,
+      isOffline
     }}>
       {saveError && <div className="error-message">Error saving game: {saveError}</div>}
+      {isOffline && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
       {loadError && <div className="error-message">Error loading game: {loadError}</div>}
       <div className="App">
         <Game />

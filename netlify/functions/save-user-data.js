@@ -6,8 +6,11 @@ const pool = mariadb.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
-  connectTimeout: 10000,
-  acquireTimeout: 10000,
+  connectTimeout: 20000,  // Increased to 20 seconds
+  acquireTimeout: 20000,  // Increased to 20 seconds
+  idleTimeout: 60000,     // Added idle timeout
+  multipleStatements: true,
+  trace: true,            // Enable tracing for debugging
 });
 
 exports.handler = async (event, context) => {
@@ -41,6 +44,7 @@ exports.handler = async (event, context) => {
   let conn;
   try {
     conn = await pool.getConnection();
+    console.log('Database connection established');
 
     const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
     
@@ -67,12 +71,25 @@ exports.handler = async (event, context) => {
       }),
     };
   } catch (error) {
-    console.error('Error saving data:', error);
+    console.error('Error details:', error);
+    if (error.code === 'ER_GET_CONNECTION_TIMEOUT' || error.code === 'ER_CONNECTION_TIMEOUT') {
+      return {
+        statusCode: 503,
+        body: JSON.stringify({ error: 'Database connection timeout. Please try again later.' })
+      };
+    }
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message, stack: error.stack })
+      body: JSON.stringify({ error: 'Failed to save data', details: error.message, code: error.code })
     };
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      try {
+        await conn.end();
+        console.log('Database connection closed');
+      } catch (err) {
+        console.error('Error closing database connection:', err);
+      }
+    }
   }
 };
