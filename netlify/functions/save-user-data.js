@@ -54,11 +54,13 @@ exports.handler = async (event, context) => {
 
   let conn;
   try {
+    console.log('Attempting to connect to database...');
     conn = await pool.getConnection();
     console.log('Connected to database');
 
     await createTableIfNotExists(conn);
 
+    console.log('Executing query to save user data...');
     const result = await conn.query(
       'INSERT INTO user_data (user_id, cookies_collected, buildings_data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?, last_updated = CURRENT_TIMESTAMP()',
       [userId, cookies_collected, buildings_data, cookies_collected, buildings_data]
@@ -73,9 +75,16 @@ exports.handler = async (event, context) => {
     console.error('Database error:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save user data', details: err.message })
+      body: JSON.stringify({ 
+        error: 'Failed to save user data', 
+        details: err.message,
+        stack: err.stack
+      })
     };
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      console.log('Closing database connection');
+      conn.release();
+    }
   }
 };
