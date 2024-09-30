@@ -120,8 +120,8 @@ function App() {
     const currentState = {
       userId,
       cookies_collected: Math.floor(gameState.cookies),
-      buildings_data: gameState.buildings,
-      achievements: unlockedAchievements,
+      buildings_data: JSON.stringify(gameState.buildings),
+      achievements: JSON.stringify(unlockedAchievements),
     };
 
     try {
@@ -136,7 +136,6 @@ function App() {
       const result = await response.json();
       console.log('Save result:', result);
 
-      lastSaveTime.current = Date.now();
       setSaveError(null);
       setIsOffline(false);
     } catch (error) {
@@ -147,17 +146,20 @@ function App() {
   }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
+    if (userId) {
+      const saveInterval = setInterval(() => {
+        console.log('Attempting to save game...');
+        saveGame();
+      }, 5000);
+      return () => clearInterval(saveInterval);
+    }
+  }, [userId, saveGame]);
+
+  useEffect(() => {
     if (userId && !gameLoaded.current) {
       loadGame();
     }
   }, [userId, loadGame]);
-
-  useEffect(() => {
-    if (userId) {
-      const saveInterval = setInterval(saveGame, 5000);
-      return () => clearInterval(saveInterval);
-    }
-  }, [userId, saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
