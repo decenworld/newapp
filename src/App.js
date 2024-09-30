@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import Game from './components/Game';
 
 export const GameContext = createContext();
@@ -27,8 +27,8 @@ const initialGameState = {
 
 function App() {
   const [gameState, setGameState] = useState(initialGameState);
-  const [lastSavedState, setLastSavedState] = useState(null);
   const [userId, setUserId] = useState(null);
+  const lastSavedStateRef = useRef({ cookies: 0, buildings: initialGameState.buildings });
 
   useEffect(() => {
     const initApp = () => {
@@ -95,10 +95,10 @@ function App() {
           cookies: savedData.cookies_collected,
           buildings: parsedBuildings.length ? parsedBuildings : prevState.buildings,
         }));
-        setLastSavedState({
+        lastSavedStateRef.current = {
           cookies: savedData.cookies_collected,
           buildings: parsedBuildings.length ? parsedBuildings : initialGameState.buildings,
-        });
+        };
         console.log('Game state loaded successfully for user:', userId);
       } else {
         console.log('Invalid or empty saved data, using initial game state for user:', userId);
@@ -122,7 +122,13 @@ function App() {
       buildings: gameState.buildings,
     };
 
-    if (JSON.stringify(currentState) !== JSON.stringify(lastSavedState)) {
+    const lastSavedState = lastSavedStateRef.current;
+
+    if (
+      currentState.cookies !== lastSavedState.cookies ||
+      JSON.stringify(currentState.buildings) !== JSON.stringify(lastSavedState.buildings)
+    ) {
+      console.log('Saving game state:', currentState);
       try {
         const response = await fetch('/.netlify/functions/save-user-data', {
           method: 'POST',
@@ -137,19 +143,23 @@ function App() {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to save user data');
+          const errorData = await response.json();
+          throw new Error(`Failed to save user data: ${errorData.error || response.statusText}`);
         }
 
-        setLastSavedState(currentState);
+        lastSavedStateRef.current = currentState;
         console.log('Game state saved successfully for user:', userId);
       } catch (error) {
-        console.error('Error saving user data:', error);
+        console.error('Error saving user data:', error.message);
+        // You might want to implement a retry mechanism here
       }
+    } else {
+      console.log('No changes detected, skipping save');
     }
-  }, [gameState, lastSavedState, userId]);
+  }, [gameState, userId]);
 
   useEffect(() => {
-    const saveInterval = setInterval(saveUserData, 10000); // Save every 10 seconds
+    const saveInterval = setInterval(saveUserData, 5000); // Save every 5 seconds
     return () => clearInterval(saveInterval);
   }, [saveUserData]);
 

@@ -35,8 +35,22 @@ exports.handler = async (event, context) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const { userId, cookies, buildings } = JSON.parse(event.body);
+  let data;
+  try {
+    data = JSON.parse(event.body);
+  } catch (error) {
+    console.error('Error parsing request body:', error);
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
+  }
+
+  const { userId, cookies, buildings } = data;
   console.log('Attempting to save data for user:', userId);
+  console.log('Cookies:', cookies);
+  console.log('Buildings:', buildings);
+
+  if (!userId || cookies === undefined || !buildings) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing required data' }) };
+  }
 
   let conn;
   try {
