@@ -6,12 +6,19 @@ const pool = mariadb.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
-  connectTimeout: 10000, // 10 seconds
-  acquireTimeout: 10000, // 10 seconds
+  connectTimeout: 10000,
+  acquireTimeout: 10000,
 });
 
 exports.handler = async (event, context) => {
   const userId = event.queryStringParameters.userId;
+
+  if (!userId) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: 'userId is required' })
+    };
+  }
 
   let conn;
   try {
@@ -21,7 +28,7 @@ exports.handler = async (event, context) => {
     if (rows.length === 0) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ message: 'User data not found' }),
+        body: JSON.stringify({ error: 'User data not found' }),
       };
     }
 
@@ -38,11 +45,7 @@ exports.handler = async (event, context) => {
     console.error('Error loading data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-        error: 'Failed to load data', 
-        details: error.message,
-        code: error.code
-      }),
+      body: JSON.stringify({ error: 'Failed to load data', details: error.message })
     };
   } finally {
     if (conn) conn.release();

@@ -58,11 +58,13 @@ function App() {
     try {
       console.log('Attempting to load game state for user:', userId);
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
-      }
+      
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load game');
+      }
+
       console.log('Loaded game state:', data);
 
       if (data.cookies_collected === undefined || !Array.isArray(data.buildings_data)) {
@@ -127,12 +129,12 @@ function App() {
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+        throw new Error(result.error || 'Failed to save game');
       }
 
-      const result = await response.json();
       console.log('Save result:', result);
       setSaveError(null);
     } catch (error) {
