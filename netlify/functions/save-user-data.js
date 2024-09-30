@@ -6,29 +6,13 @@ const pool = mariadb.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionLimit: 5,
-  acquireTimeout: 30000, // Increase timeout to 30 seconds
-  connectTimeout: 30000, // Increase timeout to 30 seconds
+  acquireTimeout: 30000,
+  connectTimeout: 30000,
 });
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 3000; // 1 second
-
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const executeWithRetry = async (operation, retries = MAX_RETRIES) => {
-  try {
-    return await operation();
-  } catch (error) {
-    if (retries > 0 && (error.code === 'ER_GET_CONNECTION_TIMEOUT' || error.code === 'ECONNREFUSED')) {
-      console.log(`Retrying operation. Attempts left: ${retries - 1}`);
-      await wait(RETRY_DELAY);
-      return executeWithRetry(operation, retries - 1);
-    }
-    throw error;
-  }
-};
-
 exports.handler = async (event, context) => {
+  console.log('Save function called');
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
@@ -37,35 +21,39 @@ exports.handler = async (event, context) => {
   try {
     data = JSON.parse(event.body);
   } catch (error) {
+    console.error('Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
   const { userId, cookies_collected, buildings_data, achievements } = data;
 
   if (!userId) {
+    console.error('Missing userId in request');
     return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
   }
 
+  console.log('Attempting to save data for userId:', userId);
+
   let conn;
   try {
-    conn = await executeWithRetry(() => pool.getConnection());
+    conn = await pool.getConnection();
     console.log('Database connection established');
 
-    await executeWithRetry(async () => {
-      const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
-      
-      if (existingUser && existingUser.length > 0) {
-        await conn.query(
-          'UPDATE user_data SET cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?',
-          [cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements), userId]
-        );
-      } else {
-        await conn.query(
-          'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
-          [userId, cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements)]
-        );
-      }
-    });
+    const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
+    
+    if (existingUser && existingUser.length > 0) {
+      await conn.query(
+        'UPDATE user_data SET cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?',
+        [cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements), userId]
+      );
+      console.log('User data updated');
+    } else {
+      await conn.query(
+        'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
+        [userId, cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements)]
+      );
+      console.log('New user data inserted');
+    }
 
     return {
       statusCode: 200,
@@ -75,9 +63,16 @@ exports.handler = async (event, context) => {
     console.error('Error saving data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message })
+      body: JSON.stringify({ error: 'Failed to save data', details: error.message, stack: error.stack })
     };
   } finally {
-    if (conn) await conn.release();
+    if (conn) {
+      try {
+        await conn.release();
+        console.log('Database connection released');
+      } catch (releaseError) {
+        console.error('Error releasing database connection:', releaseError);
+      }
+    }
   }
 };

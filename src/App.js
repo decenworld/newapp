@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import Game from './components/Game';
 import { achievements } from './achievements';  // Make sure this path is correct
 
@@ -43,7 +43,8 @@ function App() {
   const [loadError, setLoadError] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState(0);
-  const [loadAttempts, setLoadAttempts] = useState(0);
+  const loadAttempts = useRef(0);
+  const userIdFetched = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -51,24 +52,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const loadTelegramScript = () => {
-      return new Promise((resolve, reject) => {
-        if (window.Telegram) {
-          resolve();
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://telegram.org/js/telegram-web-app.js';
-        script.async = true;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.body.appendChild(script);
-      });
-    };
-
-    const initTelegram = async () => {
-      try {
-        await loadTelegramScript();
+    if (!userIdFetched.current) {
+      const fetchUserId = () => {
         if (window.Telegram && window.Telegram.WebApp) {
           const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
           if (initDataUnsafe && initDataUnsafe.user) {
@@ -79,19 +64,24 @@ function App() {
         } else {
           console.error('Telegram WebApp not available');
         }
-      } catch (error) {
-        console.error('Failed to load Telegram script:', error);
-      }
-    };
+      };
 
-    initTelegram();
+      if (document.readyState === 'complete') {
+        fetchUserId();
+      } else {
+        window.addEventListener('load', fetchUserId);
+        return () => window.removeEventListener('load', fetchUserId);
+      }
+
+      userIdFetched.current = true;
+    }
   }, []);
 
   const saveGame = useCallback(async () => {
     if (!userId || Date.now() - lastSaveTime < 5000) return;
 
     const currentState = {
-      cookies_collected: Math.floor(gameState.cookies), // Ensure this is a number, not a BigInt
+      cookies_collected: Math.floor(gameState.cookies),
       buildings_data: gameState.buildings,
       achievements: unlockedAchievements,
     };
@@ -105,6 +95,9 @@ function App() {
 
       if (!response.ok) throw new Error('Failed to save game');
 
+      const result = await response.json();
+      console.log('Save result:', result);
+
       setLastSaveTime(Date.now());
       setSaveError(null);
       setIsOffline(false);
@@ -116,7 +109,7 @@ function App() {
   }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
   const loadGame = useCallback(async () => {
-    if (!userId || loadAttempts >= 2) return;
+    if (!userId || loadAttempts.current >= 2) return;
 
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
@@ -137,9 +130,9 @@ function App() {
       setLoadError(error.message);
       setIsOffline(!navigator.onLine);
     } finally {
-      setLoadAttempts(prev => prev + 1);
+      loadAttempts.current += 1;
     }
-  }, [userId, calculateTotalCps, loadAttempts]);
+  }, [userId, calculateTotalCps]);
 
   useEffect(() => {
     if (userId) {
