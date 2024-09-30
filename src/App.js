@@ -42,8 +42,9 @@ function App() {
   const [saveError, setSaveError] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState(0);
+  const lastSaveTime = useRef(0);
   const gameLoaded = useRef(false);
+  const pendingChanges = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -113,7 +114,7 @@ function App() {
   }, [userId, calculateTotalCps]);
 
   const saveGame = useCallback(async () => {
-    if (!userId || Date.now() - lastSaveTime < 5000) return;
+    if (!userId || !pendingChanges.current || Date.now() - lastSaveTime.current < 5000) return;
 
     const currentState = {
       userId,
@@ -134,7 +135,8 @@ function App() {
       const result = await response.json();
       console.log('Save result:', result);
 
-      setLastSaveTime(Date.now());
+      lastSaveTime.current = Date.now();
+      pendingChanges.current = false;
       setSaveError(null);
       setIsOffline(false);
     } catch (error) {
@@ -142,7 +144,7 @@ function App() {
       setSaveError(error.message);
       setIsOffline(!navigator.onLine);
     }
-  }, [userId, gameState, unlockedAchievements, lastSaveTime]);
+  }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
     if (userId && !gameLoaded.current) {
@@ -192,29 +194,26 @@ function App() {
       ...prevState,
       cookies: prevState.cookies + 1
     }));
-    saveGame(); // This will only save if 5 seconds have passed since the last save
-  }, [saveGame]);
+    pendingChanges.current = true;
+  }, []);
 
-  const buyBuilding = useCallback((index) => {
+  const buyBuilding = useCallback((buildingName) => {
     setGameState(prevState => {
-      const building = prevState.buildings[index];
-      const cost = Math.floor(building.baseCost * Math.pow(1.15, building.count));
-      if (prevState.cookies >= cost) {
-        const newBuildings = [...prevState.buildings];
-        newBuildings[index] = {
-          ...building,
-          count: building.count + 1
-        };
-        const newCps = calculateTotalCps(newBuildings);
+      const building = prevState.buildings.find(b => b.name === buildingName);
+      if (building && prevState.cookies >= building.baseCost) {
+        const newBuildings = prevState.buildings.map(b => 
+          b.name === buildingName ? {...b, count: b.count + 1} : b
+        );
         return {
           ...prevState,
-          cookies: prevState.cookies - cost,
+          cookies: prevState.cookies - building.baseCost,
           buildings: newBuildings,
-          cps: newCps
+          cps: calculateTotalCps(newBuildings)
         };
       }
       return prevState;
     });
+    pendingChanges.current = true;
   }, [calculateTotalCps]);
 
   useEffect(() => {
@@ -228,7 +227,9 @@ function App() {
     return () => clearInterval(cookieInterval);
   }, []);
 
-  console.log('App rendered, userId:', userId);
+  useEffect(() => {
+    console.log('App rendered, userId:', userId);
+  }, [userId]);
 
   return (
     <GameContext.Provider value={{ 
