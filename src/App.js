@@ -23,27 +23,17 @@ const initialGameState = {
     research: Array(3).fill(false),
     unshackled: Array(20).fill(false),
   },
+  achievements: [],
+
 };
 
 function App() {
   const [userId, setUserId] = useState(null);
-  const [gameState, setGameState] = useState({
-    cookies: 0,
-    buildings: [
-      { name: "Cursor", baseCost: 15, baseCps: 0.1, count: 0 },
-      { name: "Grandma", baseCost: 100, baseCps: 1, count: 0 },
-      { name: "Farm", baseCost: 1100, baseCps: 8, count: 0 },
-      { name: "Mine", baseCost: 12000, baseCps: 47, count: 0 },
-      { name: "Factory", baseCost: 130000, baseCps: 260, count: 0 },
-    ],
-    cps: 0,
-    achievements: [],
-  });
+  const [gameState, setGameState] = useState(initialGameState);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveAttemptRef = useRef(Date.now());
-  const saveIntervalRef = useRef(null);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -99,7 +89,7 @@ function App() {
       userId,
       cookies_collected: Math.floor(gameState.cookies),
       buildings_data: JSON.stringify(gameState.buildings),
-      achievements: JSON.stringify(gameState.achievements),
+      achievements: JSON.stringify(unlockedAchievements),
     };
 
     console.log('Attempting to save game state:', JSON.stringify(currentState));
@@ -130,27 +120,18 @@ function App() {
     } finally {
       lastSaveAttemptRef.current = Date.now();
     }
-  }, [userId, gameState]);
+  }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
-    const forceSave = () => {
-      console.log('Force save triggered at:', new Date().toISOString());
-      saveGame().catch(error => console.error('Force save error:', error));
-    };
+    if (userId) {
+      const saveInterval = setInterval(() => {
+        console.log('Triggering save game...');
+        saveGame();
+      }, 5000);
 
-    if (saveIntervalRef.current) {
-      clearInterval(saveIntervalRef.current);
+      return () => clearInterval(saveInterval);
     }
-
-    saveIntervalRef.current = setInterval(forceSave, 5000);
-
-    return () => {
-      console.log('Clearing save interval');
-      if (saveIntervalRef.current) {
-        clearInterval(saveIntervalRef.current);
-      }
-    };
-  }, [saveGame]);
+  }, [userId, saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {

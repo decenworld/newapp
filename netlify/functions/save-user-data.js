@@ -10,28 +10,33 @@ const pool = mariadb.createPool({
 });
 
 exports.handler = async (event, context) => {
-  console.log('Save function called');
+  console.log('Save function called at:', new Date().toISOString());
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
   let data;
   try {
     data = JSON.parse(event.body);
+    console.log('Parsed data:', JSON.stringify(data));
   } catch (error) {
-    return { statusCode: 400, body: 'Invalid JSON in request body' };
+    console.error('Error parsing request body:', error);
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
   const { userId, cookies_collected, buildings_data, achievements } = data;
 
   if (!userId) {
-    return { statusCode: 400, body: 'userId is required' };
+    console.error('Missing userId in request');
+    return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
   }
 
   let conn;
   try {
     conn = await pool.getConnection();
+    console.log('Database connection established');
+
     const query = `
       INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements)
       VALUES (?, ?, ?, ?)
@@ -42,12 +47,15 @@ exports.handler = async (event, context) => {
         last_updated = CURRENT_TIMESTAMP
     `;
 
+    console.log('Executing query:', query);
+    console.log('Query parameters:', [userId, cookies_collected, buildings_data, achievements]);
+
     const result = await conn.query(query, [userId, cookies_collected, buildings_data, achievements]);
-    console.log('Save result:', result);
+    console.log('Save result:', JSON.stringify(result));
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Data saved successfully' }),
+      body: JSON.stringify({ message: 'Data saved successfully', result }),
     };
   } catch (error) {
     console.error('Error saving data:', error);
@@ -56,6 +64,13 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({ error: 'Failed to save data', details: error.message }),
     };
   } finally {
-    if (conn) await conn.release();
+    if (conn) {
+      try {
+        await conn.release();
+        console.log('Database connection released');
+      } catch (releaseError) {
+        console.error('Error releasing database connection:', releaseError);
+      }
+    }
   }
 };
