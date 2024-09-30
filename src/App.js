@@ -84,10 +84,10 @@ function App() {
 
     const currentState = {
       userId: userId || 'anonymous', // Use 'anonymous' if userId is not set
-      cookies_collected: Math.floor(gameState.cookies),
+      cookies_collected: Number(Math.floor(gameState.cookies)), // Ensure it's a regular number
       buildings_data: JSON.stringify(gameState.buildings.map(building => ({
         name: building.name,
-        count: building.count
+        count: Number(building.count) // Ensure count is a regular number
       }))),
       achievements: JSON.stringify(unlockedAchievements),
     };

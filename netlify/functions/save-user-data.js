@@ -18,7 +18,12 @@ exports.handler = async (event, context) => {
 
   let data;
   try {
-    data = JSON.parse(event.body);
+    data = JSON.parse(event.body, (key, value) => {
+      if (typeof value === 'bigint') {
+        return Number(value);
+      }
+      return value;
+    });
     console.log('Parsed data:', JSON.stringify(data));
   } catch (error) {
     console.error('Error parsing request body:', error);
