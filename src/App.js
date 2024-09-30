@@ -42,8 +42,6 @@ function App() {
   const [saveError, setSaveError] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
-  const lastSaveTime = useRef(0);
-  const gameLoaded = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -88,7 +86,7 @@ function App() {
   }, []);
 
   const loadGame = useCallback(async () => {
-    if (!userId || gameLoaded.current) return;
+    if (!userId) return;
 
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
@@ -106,13 +104,10 @@ function App() {
       }
       setLoadError(null);
       setIsOffline(false);
-      gameLoaded.current = true;
     } catch (error) {
       console.error('Failed to load game:', error);
       setLoadError(error.message);
       setIsOffline(!navigator.onLine);
-    } finally {
-      gameLoaded.current = true;
     }
   }, [userId, calculateTotalCps]);
 
@@ -157,21 +152,22 @@ function App() {
 
   useEffect(() => {
     if (userId) {
-      const saveInterval = setInterval(() => {
-        console.log('Triggering save game...');
-        saveGame();
-      }, 5000);
-      return () => clearInterval(saveInterval);
-    } else {
-      console.log('Save interval not set: userId is null');
-    }
-  }, [userId, saveGame]);
-
-  useEffect(() => {
-    if (userId && !gameLoaded.current) {
       loadGame();
     }
   }, [userId, loadGame]);
+
+  useEffect(() => {
+    const saveInterval = setInterval(() => {
+      if (userId) {
+        console.log('Triggering save game...');
+        saveGame();
+      } else {
+        console.log('Save skipped: userId is null');
+      }
+    }, 5000);
+
+    return () => clearInterval(saveInterval);
+  }, [userId, saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
