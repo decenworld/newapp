@@ -41,8 +41,8 @@ function App() {
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const [saveError, setSaveError] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [lastSaveTime, setLastSaveTime] = useState(0);
   const [isOffline, setIsOffline] = useState(false);
+  const [lastSaveTime, setLastSaveTime] = useState(0);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -50,10 +50,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const tgApp = window.Telegram.WebApp;
-    if (tgApp.initDataUnsafe && tgApp.initDataUnsafe.user) {
-      setUserId(tgApp.initDataUnsafe.user.id.toString());
+    // Try to get userId from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    let id = urlParams.get('userId');
+
+    // If not in URL, try to get from localStorage
+    if (!id) {
+      id = localStorage.getItem('userId');
     }
+
+    // If still no userId, generate a random one (for development purposes)
+    if (!id) {
+      id = 'user_' + Date.now();
+      localStorage.setItem('userId', id);
+    }
+
+    setUserId(id);
   }, []);
 
   const saveGame = useCallback(async () => {
@@ -101,32 +113,17 @@ function App() {
       setUnlockedAchievements(data.achievements || []);
       setLoadError(null);
       setIsOffline(false);
-
-      if (data.newUser) {
-        console.log('New user created');
-        // You might want to trigger some action here for new users
-      }
     } catch (error) {
       console.error('Failed to load game:', error);
       setLoadError(error.message);
-
-      if (error.message.includes('timeout') || error.message.includes('network')) {
-        setIsOffline(true);
-      }
-
-      if (retryCount < 3) {
-        console.log(`Retrying load... Attempt ${retryCount + 1}`);
-        setTimeout(() => loadGame(retryCount + 1), 5000 * (retryCount + 1)); // Exponential backoff
-      } else {
-        console.error('Max retries reached. Unable to load game data.');
-      }
+      setIsOffline(!navigator.onLine);
     }
-  }, [userId]);
+  }, [userId, calculateTotalCps]);
 
   useEffect(() => {
     if (userId) {
       loadGame();
-      const saveInterval = setInterval(() => saveGame(true), 5000); // Force save every 5 seconds
+      const saveInterval = setInterval(saveGame, 5000);
       return () => clearInterval(saveInterval);
     }
   }, [userId, loadGame, saveGame]);
