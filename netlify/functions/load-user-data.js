@@ -5,7 +5,9 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  connectionLimit: 5
+  connectionLimit: 5,
+  connectTimeout: 10000, // 10 seconds
+  acquireTimeout: 10000, // 10 seconds
 });
 
 exports.handler = async (event, context) => {
@@ -36,7 +38,11 @@ exports.handler = async (event, context) => {
     console.error('Error loading data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to load data', details: error.message }),
+      body: JSON.stringify({ 
+        error: 'Failed to load data', 
+        details: error.message,
+        code: error.code
+      }),
     };
   } finally {
     if (conn) conn.release();

@@ -5,7 +5,9 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  connectionLimit: 5
+  connectionLimit: 5,
+  connectTimeout: 10000, // 10 seconds
+  acquireTimeout: 10000, // 10 seconds
 });
 
 exports.handler = async (event, context) => {
@@ -21,10 +23,9 @@ exports.handler = async (event, context) => {
 
     // Check if user exists
     const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
-    const userExists = existingUser && existingUser.length > 0;
-
+    
     let result;
-    if (userExists) {
+    if (existingUser && existingUser.length > 0) {
       // Update existing user
       result = await conn.query(
         'UPDATE user_data SET cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?',
@@ -38,11 +39,12 @@ exports.handler = async (event, context) => {
       );
     }
 
+    console.log('Save operation result:', result);
+
     return {
       statusCode: 200,
       body: JSON.stringify({ 
-        message: userExists ? 'Data updated successfully' : 'New user created and data saved',
-        newUser: !userExists,
+        message: existingUser && existingUser.length > 0 ? 'Data updated successfully' : 'New user created and data saved',
         result 
       }),
     };
@@ -50,7 +52,7 @@ exports.handler = async (event, context) => {
     console.error('Error saving data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message }),
+      body: JSON.stringify({ error: 'Failed to save data', details: error.message, code: error.code }),
     };
   } finally {
     if (conn) conn.release();

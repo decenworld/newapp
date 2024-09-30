@@ -29,6 +29,8 @@ function App() {
   const [gameState, setGameState] = useState(initialGameState);
   const [userId, setUserId] = useState(null);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
+  const [loadError, setLoadError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -47,7 +49,7 @@ function App() {
     }
   }, []);
 
-  const loadGame = useCallback(async () => {
+  const loadGame = useCallback(async (retryCount = 0) => {
     if (!userId) {
       console.log('No userId available, skipping load');
       return;
@@ -57,7 +59,8 @@ function App() {
       console.log('Attempting to load game state for user:', userId);
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
       }
       const data = await response.json();
       console.log('Loaded game state:', data);
@@ -78,13 +81,28 @@ function App() {
         cps: calculateTotalCps(loadedBuildings),
       }));
       setUnlockedAchievements(data.achievements || []);
+      setLoadError(null);
     } catch (error) {
       console.error('Failed to load game:', error);
-      // Optionally, set some default state or show an error message to the user
+      setLoadError(error.message);
+      
+      if (retryCount < 3) {
+        console.log(`Retrying load... Attempt ${retryCount + 1}`);
+        setTimeout(() => loadGame(retryCount + 1), 5000);
+      } else {
+        console.error('Max retries reached. Unable to load game data.');
+        // Here you might want to set some default state or show an error message to the user
+      }
     }
   }, [userId, calculateTotalCps]);
 
-  const saveGame = useCallback(async () => {
+  useEffect(() => {
+    if (userId) {
+      loadGame();
+    }
+  }, [userId, loadGame]);
+
+  const saveGame = useCallback(async (retryCount = 0) => {
     if (!userId) {
       console.log('No userId available, skipping save');
       return;
@@ -110,32 +128,30 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
       }
 
       const result = await response.json();
       console.log('Save result:', result);
-
-      if (result.newUser) {
-        console.log('New user created');
-        // You might want to trigger some action here for new users
-      }
+      setSaveError(null);
     } catch (error) {
       console.error('Error saving user data:', error);
-      // Implement retry logic
-      setTimeout(() => saveGame(), 5000); // Retry after 5 seconds
+      setSaveError(error.message);
+      
+      if (retryCount < 3) {
+        console.log(`Retrying save... Attempt ${retryCount + 1}`);
+        setTimeout(() => saveGame(retryCount + 1), 5000);
+      } else {
+        console.error('Max retries reached. Unable to save game data.');
+      }
     }
   }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
-    if (userId) {
-      loadGame();
-    }
-  }, [userId, loadGame]);
-
-  useEffect(() => {
     let saveInterval;
     if (userId) {
+      saveGame(); // Initial save when userId is set
       saveInterval = setInterval(saveGame, 5000); // Save every 5 seconds
     }
     return () => {
@@ -202,11 +218,15 @@ function App() {
   return (
     <GameContext.Provider value={{ 
       gameState, 
-      clickCookie, 
-      buyBuilding,
+      setGameState, 
       unlockedAchievements,
-      saveGame // Add this so we can trigger a save manually if needed
+      clickCookie,
+      buyBuilding,
+      saveGame,
+      saveError
     }}>
+      {saveError && <div className="error-message">Error saving game: {saveError}</div>}
+      {loadError && <div className="error-message">Error loading game: {loadError}</div>}
       <div className="App">
         <Game />
         <button onClick={() => window.open('/.netlify/functions/download-data', '_blank')}>
