@@ -91,23 +91,28 @@ function App() {
 
       if (savedData && savedData.cookies_collected !== undefined && savedData.buildings_data) {
         const parsedBuildings = JSON.parse(savedData.buildings_data);
+        const calculatedCps = calculateTotalCps(parsedBuildings);
+        
         setGameState(prevState => ({
           ...prevState,
           cookies: savedData.cookies_collected,
           buildings: parsedBuildings.length ? parsedBuildings : prevState.buildings,
+          cps: calculatedCps,
         }));
+        
         lastSavedStateRef.current = {
           cookies: savedData.cookies_collected,
           buildings: parsedBuildings.length ? parsedBuildings : initialGameState.buildings,
         };
         console.log('Game state loaded successfully for user:', userId);
+        console.log('Calculated CPS:', calculatedCps);
       } else {
         console.log('Invalid or empty saved data, using initial game state for user:', userId);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
     }
-  }, [userId]);
+  }, [userId, calculateTotalCps]);
 
   useEffect(() => {
     if (userId) {
@@ -144,7 +149,9 @@ function App() {
       console.log('Received response from save-user-data:', response);
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
 
       const result = await response.json();
@@ -157,6 +164,7 @@ function App() {
       console.log('Updated lastSavedStateRef:', lastSavedStateRef.current);
     } catch (error) {
       console.error('Error saving user data:', error.message);
+      console.error('Error details:', error);
     }
   };
 
