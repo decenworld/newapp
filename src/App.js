@@ -33,14 +33,132 @@ function App() {
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
-  const lastSaveAttemptRef = useRef(Date.now());
+  const lastSaveTimeRef = useRef(Date.now());
   const saveTimeoutRef = useRef(null);
-  const isSavingRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const saveFailedRef = useRef(false);
 
-  // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
     return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
   }, []);
+
+  const calculateBuildingCost = useCallback((building) => {
+    return Math.floor(building.baseCost * Math.pow(1.15, building.count));
+  }, []);
+
+  const saveGame = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastSaveTimeRef.current < 10000) {
+      console.log('Last save was less than 10 seconds ago, scheduling next save');
+      pendingSaveRef.current = true;
+      return;
+    }
+
+    console.log('Saving game at:', new Date().toISOString());
+    lastSaveTimeRef.current = now;
+    pendingSaveRef.current = false;
+
+    const currentState = {
+      userId: userId || 'anonymous',
+      cookies_collected: Number(Math.floor(gameState.cookies)),
+      buildings_data: JSON.stringify(gameState.buildings.map(building => ({
+        name: building.name,
+        baseCost: Number(building.baseCost),
+        baseCps: Number(building.baseCps),
+        count: Number(building.count)
+      }))),
+      achievements: JSON.stringify(unlockedAchievements),
+    };
+
+    console.log('Attempting to save game state:', JSON.stringify(currentState));
+
+    try {
+      const response = await fetch('/.netlify/functions/save-user-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentState),
+      });
+
+      const responseText = await response.text();
+      console.log('Raw save response:', responseText);
+
+      if (!response.ok) {
+        throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${responseText}`);
+      }
+
+      const result = JSON.parse(responseText);
+      console.log('Save result:', JSON.stringify(result));
+
+      saveErrorRef.current = null;
+      isOfflineRef.current = false;
+      saveFailedRef.current = false;
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      saveErrorRef.current = error.message;
+      isOfflineRef.current = !navigator.onLine;
+      saveFailedRef.current = true;
+      
+      // Schedule a retry after 10 seconds
+      setTimeout(() => {
+        console.log('Retrying save after failure...');
+        triggerSave();
+      }, 10000);
+    }
+  }, [userId, gameState, unlockedAchievements]);
+
+  const scheduleSave = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    const delay = saveFailedRef.current ? 10000 : 10000;
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveGame();
+      if (pendingSaveRef.current) {
+        scheduleSave();
+      }
+    }, delay);
+  }, [saveGame]);
+
+  const triggerSave = useCallback(() => {
+    if (Date.now() - lastSaveTimeRef.current >= 10000 && !saveFailedRef.current) {
+      saveGame();
+    } else {
+      scheduleSave();
+    }
+  }, [saveGame, scheduleSave]);
+
+  const buyBuilding = useCallback((buildingName) => {
+    setGameState(prevState => {
+      const buildingIndex = prevState.buildings.findIndex(b => b.name === buildingName);
+      if (buildingIndex === -1) return prevState;
+
+      const building = prevState.buildings[buildingIndex];
+      const cost = calculateBuildingCost(building);
+
+      if (prevState.cookies < cost) {
+        console.log(`Not enough cookies to buy ${buildingName}. Need ${cost}, have ${prevState.cookies}`);
+        return prevState;
+      }
+
+      const newBuildings = prevState.buildings.map((b, index) => 
+        index === buildingIndex ? { ...b, count: b.count + 1 } : b
+      );
+
+      const newCps = calculateTotalCps(newBuildings);
+
+      console.log(`Bought ${buildingName} for ${cost} cookies. New count: ${newBuildings[buildingIndex].count}`);
+
+      return {
+        ...prevState,
+        cookies: prevState.cookies - cost,
+        buildings: newBuildings,
+        cps: newCps
+      };
+    });
+    triggerSave();
+  }, [calculateBuildingCost, calculateTotalCps, triggerSave]);
 
   useEffect(() => {
     const loadTelegramScript = () => {
@@ -80,76 +198,6 @@ function App() {
     initTelegram();
   }, []);
 
-  const saveGame = useCallback(async () => {
-    if (isSavingRef.current) {
-      console.log('Save already in progress, skipping...');
-      return;
-    }
-
-    const now = Date.now();
-    if (now - lastSaveAttemptRef.current < 5000) {
-      console.log('Last save attempt was less than 5 seconds ago, skipping...');
-      return;
-    }
-
-    console.log('saveGame function called at:', new Date().toISOString());
-    console.log('Current userId:', userId);
-
-    isSavingRef.current = true;
-    lastSaveAttemptRef.current = now;
-
-    const currentState = {
-      userId: userId || 'anonymous',
-      cookies_collected: Number(Math.floor(gameState.cookies)),
-      buildings_data: JSON.stringify(gameState.buildings.map(building => ({
-        name: building.name,
-        baseCost: Number(building.baseCost),
-        baseCps: Number(building.baseCps),
-        count: Number(building.count)
-      }))),
-      achievements: JSON.stringify(unlockedAchievements),
-    };
-
-    console.log('Attempting to save game state:', JSON.stringify(currentState));
-
-    try {
-      const response = await fetch('/.netlify/functions/save-user-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentState),
-      });
-
-      const responseText = await response.text();
-      console.log('Raw save response:', responseText);
-
-      if (!response.ok) {
-        throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${responseText}`);
-      }
-
-      const result = JSON.parse(responseText);
-      console.log('Save result:', JSON.stringify(result));
-
-      saveErrorRef.current = null;
-      isOfflineRef.current = false;
-    } catch (error) {
-      console.error('Error saving user data:', error);
-      saveErrorRef.current = error.message;
-      isOfflineRef.current = !navigator.onLine;
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [userId, gameState, unlockedAchievements]);
-
-  const scheduleSave = useCallback(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    saveTimeoutRef.current = setTimeout(() => {
-      saveGame();
-      saveTimeoutRef.current = null;
-    }, 5000);
-  }, [saveGame]);
-
   useEffect(() => {
     if (userId) {
       scheduleSave();
@@ -165,7 +213,7 @@ function App() {
     return () => {
       if (userId) {
         console.log('Saving game before unmount...');
-        saveGame();
+        saveGame(true);
       }
     };
   }, [userId, saveGame]);
@@ -201,33 +249,12 @@ function App() {
   }, [gameState, checkAchievements]);
 
   const clickCookie = useCallback(() => {
-    console.log('Cookie clicked');
     setGameState(prevState => ({
       ...prevState,
       cookies: prevState.cookies + 1
     }));
+    // Don't trigger save on every click
   }, []);
-
-  const buyBuilding = useCallback((buildingName) => {
-    console.log('Attempting to buy building:', buildingName);
-    setGameState(prevState => {
-      const building = prevState.buildings.find(b => b.name === buildingName);
-      if (building && prevState.cookies >= building.baseCost) {
-        console.log('Building purchased:', buildingName);
-        const newBuildings = prevState.buildings.map(b => 
-          b.name === buildingName ? {...b, count: b.count + 1} : b
-        );
-        return {
-          ...prevState,
-          cookies: prevState.cookies - building.baseCost,
-          buildings: newBuildings,
-          cps: calculateTotalCps(newBuildings)
-        };
-      }
-      console.log('Not enough cookies to buy building:', buildingName);
-      return prevState;
-    });
-  }, [calculateTotalCps]);
 
   useEffect(() => {
     const cookieInterval = setInterval(() => {
@@ -243,10 +270,15 @@ function App() {
   useEffect(() => {
     console.log('Current game state:', JSON.stringify(gameState));
     console.log('Current achievements:', JSON.stringify(unlockedAchievements));
-    console.log('Last save attempt:', new Date(lastSaveAttemptRef.current).toISOString());
+    console.log('Last save attempt:', new Date(lastSaveTimeRef.current).toISOString());
     console.log('Is offline:', isOfflineRef.current);
     console.log('Save error:', saveErrorRef.current);
   }, [gameState, unlockedAchievements]);
+
+  useEffect(() => {
+    // This effect will handle scheduling saves when the game state changes
+    triggerSave();
+  }, [gameState, triggerSave]);
 
   console.log('App rendered, userId:', userId);
 
@@ -257,7 +289,8 @@ function App() {
       unlockedAchievements,
       clickCookie,
       buyBuilding,
-      saveGame: scheduleSave,
+      calculateBuildingCost,
+      saveGame: triggerSave, // Use triggerSave instead of scheduleSave
       saveError: saveErrorRef.current,
       loadError: null,
       isOffline: isOfflineRef.current

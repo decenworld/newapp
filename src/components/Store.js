@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { GameContext } from '../App';
 
 const Store = ({ onClose }) => {
-  const { gameState, buyBuilding } = useContext(GameContext);
+  const { gameState, buyBuilding, calculateBuildingCost } = useContext(GameContext);
 
   const formatNumber = (num) => {
     if (num >= 1e6) return (num / 1e6).toFixed(2) + ' million';
@@ -18,7 +18,7 @@ const Store = ({ onClose }) => {
       </div>
       <div className="store-content">
         {gameState.buildings.map((building, index) => {
-          const cost = Math.floor(building.baseCost * Math.pow(1.15, building.count));
+          const cost = calculateBuildingCost(building);
           return (
             <div key={index} className="upgrade-item">
               <div className="upgrade-icon">{building.name[0]}</div>
@@ -29,7 +29,7 @@ const Store = ({ onClose }) => {
               <div className="upgrade-buttons">
                 <button
                   className="buy-button"
-                  onClick={() => buyBuilding(index)}
+                  onClick={() => buyBuilding(building.name)}
                   disabled={gameState.cookies < cost}
                 >
                   Buy 1 ({formatNumber(cost)} cookies)
