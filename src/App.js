@@ -122,44 +122,31 @@ function App() {
       buildings_data: JSON.stringify(gameState.buildings),
     };
 
-    const lastSavedState = lastSavedStateRef.current;
+    console.log('Saving game state:', currentState);
+    try {
+      const response = await fetch('/.netlify/functions/save-user-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          cookies_collected: currentState.cookies_collected,
+          buildings_data: currentState.buildings_data,
+        }),
+      });
 
-    if (
-      currentState.cookies_collected !== lastSavedState.cookies ||
-      currentState.buildings_data !== JSON.stringify(lastSavedState.buildings)
-    ) {
-      console.log('Saving game state:', currentState);
-      try {
-        const response = await fetch('/.netlify/functions/save-user-data', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId,
-            cookies_collected: currentState.cookies_collected,
-            buildings_data: currentState.buildings_data,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`Failed to save user data: ${errorData.error || response.statusText}`);
-        }
-
-        const responseData = await response.json();
-        console.log('Save response:', responseData);
-
-        lastSavedStateRef.current = {
-          cookies: currentState.cookies_collected,
-          buildings: gameState.buildings,
-        };
-        console.log('Game state saved successfully for user:', userId);
-      } catch (error) {
-        console.error('Error saving user data:', error.message);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to save user data: ${errorData.error || response.statusText}`);
       }
-    } else {
-      console.log('No changes detected, skipping save');
+
+      const responseData = await response.json();
+      console.log('Save response:', responseData);
+
+      console.log('Game state saved successfully for user:', userId);
+    } catch (error) {
+      console.error('Error saving user data:', error.message);
     }
   }, [gameState, userId]);
 
