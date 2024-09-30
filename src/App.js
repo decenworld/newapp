@@ -44,7 +44,6 @@ function App() {
   const [isOffline, setIsOffline] = useState(false);
   const lastSaveTime = useRef(0);
   const gameLoaded = useRef(false);
-  const pendingChanges = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -96,13 +95,15 @@ function App() {
       if (!response.ok) throw new Error('Failed to load game');
 
       const data = await response.json();
-      setGameState(prevState => ({
-        ...prevState,
-        cookies: data.cookies_collected,
-        buildings: data.buildings_data,
-        cps: calculateTotalCps(data.buildings_data),
-      }));
-      setUnlockedAchievements(data.achievements || []);
+      if (data.cookies_collected !== undefined) {
+        setGameState(prevState => ({
+          ...prevState,
+          cookies: data.cookies_collected,
+          buildings: data.buildings_data,
+          cps: calculateTotalCps(data.buildings_data),
+        }));
+        setUnlockedAchievements(data.achievements || []);
+      }
       setLoadError(null);
       setIsOffline(false);
       gameLoaded.current = true;
@@ -114,7 +115,7 @@ function App() {
   }, [userId, calculateTotalCps]);
 
   const saveGame = useCallback(async () => {
-    if (!userId || !pendingChanges.current || Date.now() - lastSaveTime.current < 5000) return;
+    if (!userId) return;
 
     const currentState = {
       userId,
@@ -136,7 +137,6 @@ function App() {
       console.log('Save result:', result);
 
       lastSaveTime.current = Date.now();
-      pendingChanges.current = false;
       setSaveError(null);
       setIsOffline(false);
     } catch (error) {
@@ -194,7 +194,6 @@ function App() {
       ...prevState,
       cookies: prevState.cookies + 1
     }));
-    pendingChanges.current = true;
   }, []);
 
   const buyBuilding = useCallback((buildingName) => {
@@ -213,7 +212,6 @@ function App() {
       }
       return prevState;
     });
-    pendingChanges.current = true;
   }, [calculateTotalCps]);
 
   useEffect(() => {
