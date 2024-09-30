@@ -42,6 +42,7 @@ function App() {
   const [saveError, setSaveError] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [isOffline, setIsOffline] = useState(false);
+  const lastSavedState = useRef(null);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -124,6 +125,12 @@ function App() {
       achievements: JSON.stringify(unlockedAchievements),
     };
 
+    // Only save if the state has changed
+    if (JSON.stringify(currentState) === JSON.stringify(lastSavedState.current)) {
+      console.log('State unchanged, skipping save');
+      return;
+    }
+
     console.log('Attempting to save game state:', currentState);
 
     try {
@@ -143,6 +150,7 @@ function App() {
       const result = JSON.parse(responseText);
       console.log('Save result:', result);
 
+      lastSavedState.current = currentState;
       setSaveError(null);
       setIsOffline(false);
     } catch (error) {
