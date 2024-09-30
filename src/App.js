@@ -37,8 +37,39 @@ function App() {
   const lastSaveTimeRef = useRef(Date.now());
   const saveTimeoutRef = useRef(null);
 
+  useEffect(() => {
+    // Check for Telegram WebApp data
+    if (window.Telegram && window.Telegram.WebApp) {
+      const initData = window.Telegram.WebApp.initData;
+      if (initData) {
+        try {
+          const parsedData = JSON.parse(initData);
+          if (parsedData.user && parsedData.user.id) {
+            setUserId(parsedData.user.id.toString());
+          } else {
+            console.log('Telegram user data not available');
+            setUserId('anonymous');
+          }
+        } catch (error) {
+          console.error('Error parsing Telegram init data:', error);
+          setUserId('anonymous');
+        }
+      } else {
+        console.log('Telegram init data not available');
+        setUserId('anonymous');
+      }
+    } else {
+      console.log('Telegram WebApp not available');
+      setUserId('anonymous');
+    }
+  }, []);
+
   const loadGameData = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || userId === 'anonymous') {
+      setGameState(initialGameState);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
@@ -46,7 +77,15 @@ function App() {
         throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
-      setGameState(data.gameState || initialGameState);
+      if (data.gameState) {
+        setGameState(prevState => ({
+          ...initialGameState,
+          ...data.gameState,
+          buildings: data.gameState.buildings || initialGameState.buildings,
+        }));
+      } else {
+        setGameState(initialGameState);
+      }
       setUnlockedAchievements(data.achievements || []);
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -161,44 +200,6 @@ function App() {
   }, [calculateBuildingCost, calculateTotalCps]);
 
   useEffect(() => {
-    const loadTelegramScript = () => {
-      return new Promise((resolve, reject) => {
-        if (window.Telegram) {
-          resolve();
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://telegram.org/js/telegram-web-app.js';
-        script.async = true;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.body.appendChild(script);
-      });
-    };
-
-    const initTelegram = async () => {
-      try {
-        await loadTelegramScript();
-        if (window.Telegram && window.Telegram.WebApp) {
-          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-          if (initDataUnsafe && initDataUnsafe.user) {
-            setUserId(initDataUnsafe.user.id.toString());
-            console.log('User ID set:', initDataUnsafe.user.id.toString());
-          } else {
-            console.error('Telegram user data not available');
-          }
-        } else {
-          console.error('Telegram WebApp not available');
-        }
-      } catch (error) {
-        console.error('Failed to load Telegram script:', error);
-      }
-    };
-
-    initTelegram();
-  }, []);
-
-  useEffect(() => {
     return () => {
       if (userId) {
         console.log('Saving game before unmount...');
@@ -224,8 +225,20 @@ function App() {
   }, [saveGame]);
 
   const checkAchievements = useCallback(() => {
+    if (!gameState) {
+      console.log('Game state is null, skipping achievement check');
+      return;
+    }
+
     const newAchievements = achievements.filter(
-      achievement => !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState)
+      achievement => {
+        try {
+          return !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState);
+        } catch (error) {
+          console.error(`Error checking achievement ${achievement.id}:`, error);
+          return false;
+        }
+      }
     );
 
     if (newAchievements.length > 0) {
@@ -234,7 +247,9 @@ function App() {
   }, [gameState, unlockedAchievements]);
 
   useEffect(() => {
-    checkAchievements();
+    if (gameState) {
+      checkAchievements();
+    }
   }, [gameState, checkAchievements]);
 
   const clickCookie = useCallback(() => {
@@ -246,15 +261,20 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!gameState) return;
+
     const cookieInterval = setInterval(() => {
-      setGameState(prevState => ({
-        ...prevState,
-        cookies: prevState.cookies + prevState.cps / 10  // Update every 100ms
-      }));
+      setGameState(prevState => {
+        if (!prevState) return initialGameState;
+        return {
+          ...prevState,
+          cookies: prevState.cookies + prevState.cps / 10  // Update every 100ms
+        };
+      });
     }, 100);
 
     return () => clearInterval(cookieInterval);
-  }, []);
+  }, [gameState]);
 
   useEffect(() => {
     console.log('Current game state:', JSON.stringify(gameState));
