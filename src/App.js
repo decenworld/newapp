@@ -35,7 +35,7 @@ function App() {
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
-  const saveTimeoutRef = useRef(null);
+  const userIdRetryCountRef = useRef(0);
 
   const loadTelegramScript = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -58,11 +58,11 @@ function App() {
       
       if (data.gameState) {
         setGameState({
-          ...initialGameState,
           cookies: Number(data.gameState.cookies_collected) || 0,
-          buildings: data.gameState.buildings_data ? JSON.parse(data.gameState.buildings_data) : initialGameState.buildings,
+          buildings: JSON.parse(data.gameState.buildings_data) || [],
+          cps: 0, // You'll need to calculate this based on the buildings
         });
-        setUnlockedAchievements(data.gameState.achievements ? JSON.parse(data.gameState.achievements) : []);
+        setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
       } else {
         setGameState(initialGameState);
         setUnlockedAchievements([]);
@@ -76,36 +76,57 @@ function App() {
     }
   }, []);
 
+  const getUserId = useCallback(async () => {
+    if (window.Telegram && window.Telegram.WebApp) {
+      const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+      if (initDataUnsafe && initDataUnsafe.user) {
+        const id = initDataUnsafe.user.id.toString();
+        if (id !== 'anonymous' && !isNaN(Number(id))) {
+          setUserId(id);
+          console.log('User ID set:', id);
+          await loadGameData(id);
+        } else {
+          throw new Error('Invalid user ID');
+        }
+      } else {
+        throw new Error('Telegram user data not available');
+      }
+    } else {
+      throw new Error('Telegram WebApp not available');
+    }
+  }, [loadGameData]);
+
   useEffect(() => {
     const initTelegram = async () => {
       try {
         await loadTelegramScript();
-        if (window.Telegram && window.Telegram.WebApp) {
-          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-          if (initDataUnsafe && initDataUnsafe.user) {
-            const id = initDataUnsafe.user.id.toString();
-            setUserId(id);
-            console.log('User ID set:', id);
-            await loadGameData(id);
-          } else {
-            console.error('Telegram user data not available');
-            setIsLoading(false);
-          }
+        await getUserId();
+      } catch (error) {
+        console.error('Failed to get user ID:', error);
+        if (userIdRetryCountRef.current < 5) {
+          userIdRetryCountRef.current++;
+          setTimeout(initTelegram, 1000);
         } else {
-          console.error('Telegram WebApp not available');
+          console.error('Failed to get user ID after 5 attempts');
           setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Failed to load Telegram script:', error);
-        setIsLoading(false);
       }
     };
 
     initTelegram();
-  }, [loadTelegramScript, loadGameData]);
+  }, [loadTelegramScript, getUserId]);
 
-  const saveGame = useCallback(async () => {
-    if (!userId || !gameState) return;
+  const saveGame = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSaveTimeRef.current < 10000) {
+      console.log('Last save was less than 10 seconds ago, skipping this save');
+      return;
+    }
+
+    if (!userId || !gameState) {
+      console.log('UserId or gameState not available, skipping save');
+      return;
+    }
 
     console.log('Saving game at:', new Date().toISOString());
     console.log('Current userId:', userId);
@@ -119,48 +140,36 @@ function App() {
 
     console.log('Attempting to save game state:', JSON.stringify(currentState));
 
-    try {
-      const response = await fetch('/.netlify/functions/save-user-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentState),
+    fetch('/.netlify/functions/save-user-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentState),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(() => {
+        console.log('Game saved successfully');
+        saveErrorRef.current = null;
+        isOfflineRef.current = false;
+      })
+      .catch(error => {
+        console.error('Error saving user data:', error);
+        saveErrorRef.current = error.message;
+        isOfflineRef.current = !navigator.onLine;
+      })
+      .finally(() => {
+        lastSaveTimeRef.current = now;
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
-      }
-
-      console.log('Game saved successfully');
-      saveErrorRef.current = null;
-      isOfflineRef.current = false;
-    } catch (error) {
-      console.error('Error saving user data:', error);
-      saveErrorRef.current = error.message;
-      isOfflineRef.current = !navigator.onLine;
-    }
   }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
-    if (gameState && !isLoading) {
-      // Start saving 5 seconds after the game has loaded
-      const initialSaveTimeout = setTimeout(() => {
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-
-        saveTimeoutRef.current = setTimeout(() => {
-          saveGame();
-          saveTimeoutRef.current = null;
-        }, 10000);
-      }, 5000);
-
-      return () => {
-        if (initialSaveTimeout) {
-          clearTimeout(initialSaveTimeout);
-        }
-      };
-    }
-  }, [gameState, isLoading, saveGame]);
+    const saveInterval = setInterval(saveGame, 10000);
+    return () => clearInterval(saveInterval);
+  }, [saveGame]);
 
   const calculateTotalCps = useCallback((buildings) => {
     return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
@@ -297,6 +306,7 @@ function App() {
       gameState, 
       setGameState, 
       unlockedAchievements,
+      setUnlockedAchievements,
       clickCookie,
       buyBuilding,
       calculateBuildingCost,
