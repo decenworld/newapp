@@ -2,6 +2,7 @@ const mariadb = require('mariadb');
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT, 10),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
@@ -70,7 +71,8 @@ exports.handler = async (event, context) => {
         details: error.message, 
         stack: error.stack,
         sqlState: error.sqlState,
-        sqlMessage: error.sqlMessage
+        sqlMessage: error.sqlMessage,
+        code: error.code
       })
     };
   } finally {

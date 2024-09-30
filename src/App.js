@@ -133,12 +133,14 @@ function App() {
         body: JSON.stringify(currentState),
       });
 
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${errorText}`);
+        throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${responseText}`);
       }
 
-      const result = await response.json();
+      const result = JSON.parse(responseText);
       console.log('Save result:', result);
 
       setSaveError(null);
