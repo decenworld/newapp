@@ -81,13 +81,14 @@ function App() {
   const saveGame = useCallback(async () => {
     console.log('saveGame function called at:', new Date().toISOString());
     console.log('Current userId:', userId);
-    console.log('Current gameState:', JSON.stringify(gameState));
-    console.log('Current unlockedAchievements:', JSON.stringify(unlockedAchievements));
 
     const currentState = {
       userId: userId || 'anonymous', // Use 'anonymous' if userId is not set
       cookies_collected: Math.floor(gameState.cookies),
-      buildings_data: JSON.stringify(gameState.buildings),
+      buildings_data: JSON.stringify(gameState.buildings.map(building => ({
+        name: building.name,
+        count: building.count
+      }))),
       achievements: JSON.stringify(unlockedAchievements),
     };
 
