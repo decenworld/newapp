@@ -31,6 +31,7 @@ function App() {
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [lastSaveTime, setLastSaveTime] = useState(Date.now());
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -106,7 +107,12 @@ function App() {
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  const saveGame = useCallback(async (retryCount = 0) => {
+  const saveGame = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastSaveTime < 5000) {
+      return; // Don't save if less than 5 seconds have passed since the last save
+    }
+
     if (!userId) {
       console.log('No userId available, skipping save');
       return;
@@ -139,29 +145,18 @@ function App() {
 
       console.log('Save result:', result);
       setSaveError(null);
+      setLastSaveTime(now);
     } catch (error) {
       console.error('Error saving user data:', error);
       setSaveError(error.message);
-      
-      if (retryCount < 3) {
-        console.log(`Retrying save... Attempt ${retryCount + 1}`);
-        await sleep(5000); // Wait 5 seconds before retrying
-        saveGame(retryCount + 1);
-      } else {
-        console.error('Max retries reached. Unable to save game data.');
-      }
     }
-  }, [userId, gameState, unlockedAchievements]);
+  }, [userId, gameState, unlockedAchievements, lastSaveTime]);
 
   useEffect(() => {
-    let saveInterval;
     if (userId) {
-      saveGame(); // Initial save when userId is set
-      saveInterval = setInterval(saveGame, 60000); // Save every 60 seconds instead of 5
+      const saveInterval = setInterval(() => saveGame(true), 5000); // Force save every 5 seconds
+      return () => clearInterval(saveInterval);
     }
-    return () => {
-      if (saveInterval) clearInterval(saveInterval);
-    };
   }, [userId, saveGame]);
 
   const checkAchievements = useCallback(() => {
@@ -183,7 +178,8 @@ function App() {
       ...prevState,
       cookies: prevState.cookies + 1
     }));
-  }, []);
+    saveGame(); // This will only save if 5 seconds have passed since the last save
+  }, [saveGame]);
 
   const buyBuilding = useCallback((index) => {
     setGameState(prevState => {

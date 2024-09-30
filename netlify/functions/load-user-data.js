@@ -10,6 +10,18 @@ const pool = mariadb.createPool({
   acquireTimeout: 10000,
 });
 
+const defaultGameState = {
+  cookies_collected: 0,
+  buildings_data: [
+    { name: "Cursor", baseCost: 15, baseCps: 0.1, count: 0 },
+    { name: "Grandma", baseCost: 100, baseCps: 1, count: 0 },
+    { name: "Farm", baseCost: 1100, baseCps: 8, count: 0 },
+    { name: "Mine", baseCost: 12000, baseCps: 47, count: 0 },
+    { name: "Factory", baseCost: 130000, baseCps: 260, count: 0 },
+  ],
+  achievements: []
+};
+
 exports.handler = async (event, context) => {
   const userId = event.queryStringParameters.userId;
 
@@ -26,9 +38,14 @@ exports.handler = async (event, context) => {
     const rows = await conn.query('SELECT cookies_collected, buildings_data, achievements FROM user_data WHERE user_id = ?', [userId]);
     
     if (rows.length === 0) {
+      // Create default data for new user
+      await conn.query(
+        'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
+        [userId, defaultGameState.cookies_collected, JSON.stringify(defaultGameState.buildings_data), JSON.stringify(defaultGameState.achievements)]
+      );
       return {
-        statusCode: 404,
-        body: JSON.stringify({ error: 'User data not found' }),
+        statusCode: 200,
+        body: JSON.stringify(defaultGameState),
       };
     }
 
@@ -45,7 +62,7 @@ exports.handler = async (event, context) => {
     console.error('Error loading data:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to load data', details: error.message })
+      body: JSON.stringify({ error: 'Failed to load data', details: error.message, stack: error.stack })
     };
   } finally {
     if (conn) conn.release();
