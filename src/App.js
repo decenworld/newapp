@@ -29,48 +29,57 @@ const initialGameState = {
 
 function App() {
   const [userId, setUserId] = useState(null);
-  const [gameState, setGameState] = useState(initialGameState);
+  const [gameState, setGameState] = useState(null);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
   const saveTimeoutRef = useRef(null);
-  const pendingSaveRef = useRef(false);
-  const saveFailedRef = useRef(false);
 
-  const calculateTotalCps = useCallback((buildings) => {
-    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
-  }, []);
+  const loadGameData = useCallback(async () => {
+    if (!userId) return;
 
-  const calculateBuildingCost = useCallback((building) => {
-    return Math.floor(building.baseCost * Math.pow(1.15, building.count));
-  }, []);
+    try {
+      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      setGameState(data.gameState || initialGameState);
+      setUnlockedAchievements(data.achievements || []);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setGameState(initialGameState);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId]);
 
-  const saveGame = useCallback(async (force = false) => {
+  useEffect(() => {
+    if (userId) {
+      loadGameData();
+    }
+  }, [userId, loadGameData]);
+
+  const saveGame = useCallback(async () => {
+    if (!userId || !gameState) return;
+
     const now = Date.now();
-    if (!force && now - lastSaveTimeRef.current < 10000) {
-      console.log('Last save was less than 10 seconds ago, scheduling next save');
-      pendingSaveRef.current = true;
+    if (now - lastSaveTimeRef.current < 10000) {
+      console.log('Last save was less than 10 seconds ago, skipping this save');
       return;
     }
 
     console.log('Saving game at:', new Date().toISOString());
     lastSaveTimeRef.current = now;
-    pendingSaveRef.current = false;
 
     const currentState = {
-      userId: userId || 'anonymous',
+      userId,
       cookies_collected: Number(Math.floor(gameState.cookies)),
-      buildings_data: JSON.stringify(gameState.buildings.map(building => ({
-        name: building.name,
-        baseCost: Number(building.baseCost),
-        baseCps: Number(building.baseCps),
-        count: Number(building.count)
-      }))),
+      buildings_data: JSON.stringify(gameState.buildings),
       achievements: JSON.stringify(unlockedAchievements),
     };
-
-    console.log('Attempting to save game state:', JSON.stringify(currentState));
 
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
@@ -79,55 +88,46 @@ function App() {
         body: JSON.stringify(currentState),
       });
 
-      const responseText = await response.text();
-      console.log('Raw save response:', responseText);
-
       if (!response.ok) {
-        throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${responseText}`);
+        throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
       }
 
-      const result = JSON.parse(responseText);
-      console.log('Save result:', JSON.stringify(result));
-
+      console.log('Game saved successfully');
       saveErrorRef.current = null;
       isOfflineRef.current = false;
-      saveFailedRef.current = false;
     } catch (error) {
       console.error('Error saving user data:', error);
       saveErrorRef.current = error.message;
       isOfflineRef.current = !navigator.onLine;
-      saveFailedRef.current = true;
-      
-      // Schedule a retry after 10 seconds
-      setTimeout(() => {
-        console.log('Retrying save after failure...');
-        triggerSave();
-      }, 10000);
     }
   }, [userId, gameState, unlockedAchievements]);
 
-  const scheduleSave = useCallback(() => {
+  useEffect(() => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    const delay = saveFailedRef.current ? 10000 : 10000;
-
-    saveTimeoutRef.current = setTimeout(() => {
-      saveGame();
-      if (pendingSaveRef.current) {
-        scheduleSave();
-      }
-    }, delay);
-  }, [saveGame]);
-
-  const triggerSave = useCallback(() => {
-    if (Date.now() - lastSaveTimeRef.current >= 10000 && !saveFailedRef.current) {
-      saveGame();
-    } else {
-      scheduleSave();
+    if (!isLoading && gameState) {
+      saveTimeoutRef.current = setTimeout(() => {
+        saveGame();
+        saveTimeoutRef.current = null;
+      }, 10000);
     }
-  }, [saveGame, scheduleSave]);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [gameState, isLoading, saveGame]);
+
+  const calculateTotalCps = useCallback((buildings) => {
+    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
+  }, []);
+
+  const calculateBuildingCost = useCallback((building) => {
+    return Math.floor(building.baseCost * Math.pow(1.15, building.count));
+  }, []);
 
   const buyBuilding = useCallback((buildingName) => {
     setGameState(prevState => {
@@ -157,8 +157,8 @@ function App() {
         cps: newCps
       };
     });
-    triggerSave();
-  }, [calculateBuildingCost, calculateTotalCps, triggerSave]);
+    // No need to trigger save here, it will be handled by the useEffect
+  }, [calculateBuildingCost, calculateTotalCps]);
 
   useEffect(() => {
     const loadTelegramScript = () => {
@@ -197,17 +197,6 @@ function App() {
 
     initTelegram();
   }, []);
-
-  useEffect(() => {
-    if (userId) {
-      scheduleSave();
-    }
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [userId, gameState, unlockedAchievements, scheduleSave]);
 
   useEffect(() => {
     return () => {
@@ -253,7 +242,7 @@ function App() {
       ...prevState,
       cookies: prevState.cookies + 1
     }));
-    // Don't trigger save on every click
+    // No need to trigger save here, it will be handled by the useEffect
   }, []);
 
   useEffect(() => {
@@ -275,12 +264,11 @@ function App() {
     console.log('Save error:', saveErrorRef.current);
   }, [gameState, unlockedAchievements]);
 
-  useEffect(() => {
-    // This effect will handle scheduling saves when the game state changes
-    triggerSave();
-  }, [gameState, triggerSave]);
-
   console.log('App rendered, userId:', userId);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <GameContext.Provider value={{ 
@@ -290,9 +278,7 @@ function App() {
       clickCookie,
       buyBuilding,
       calculateBuildingCost,
-      saveGame: triggerSave, // Use triggerSave instead of scheduleSave
       saveError: saveErrorRef.current,
-      loadError: null,
       isOffline: isOfflineRef.current
     }}>
       {(saveErrorRef.current) && <div className="error-message">Error: {saveErrorRef.current}</div>}
