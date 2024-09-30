@@ -35,6 +35,7 @@ function App() {
   const isOfflineRef = useRef(false);
   const lastSaveAttemptRef = useRef(Date.now());
   const saveTimeoutRef = useRef(null);
+  const isSavingRef = useRef(false);
 
   // Add this function to calculate total CPS
   const calculateTotalCps = useCallback((buildings) => {
@@ -80,8 +81,22 @@ function App() {
   }, []);
 
   const saveGame = useCallback(async () => {
+    if (isSavingRef.current) {
+      console.log('Save already in progress, skipping...');
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSaveAttemptRef.current < 5000) {
+      console.log('Last save attempt was less than 5 seconds ago, skipping...');
+      return;
+    }
+
     console.log('saveGame function called at:', new Date().toISOString());
     console.log('Current userId:', userId);
+
+    isSavingRef.current = true;
+    lastSaveAttemptRef.current = now;
 
     const currentState = {
       userId: userId || 'anonymous',
@@ -121,7 +136,7 @@ function App() {
       saveErrorRef.current = error.message;
       isOfflineRef.current = !navigator.onLine;
     } finally {
-      lastSaveAttemptRef.current = Date.now();
+      isSavingRef.current = false;
     }
   }, [userId, gameState, unlockedAchievements]);
 
@@ -242,7 +257,7 @@ function App() {
       unlockedAchievements,
       clickCookie,
       buyBuilding,
-      saveGame: scheduleSave, // Change this to scheduleSave
+      saveGame: scheduleSave,
       saveError: saveErrorRef.current,
       loadError: null,
       isOffline: isOfflineRef.current
