@@ -142,16 +142,28 @@ function App() {
 
       const result = await response.json();
       console.log('Save response:', result);
+      
+      // Update lastSavedStateRef
+      lastSavedStateRef.current = {
+        cookies: currentState.cookies_collected,
+        buildings: gameState.buildings,
+      };
     } catch (error) {
       console.error('Error saving user data:', error.message);
     }
   }, [gameState, userId]);
 
   useEffect(() => {
+    let saveInterval;
     if (userId) {
-      const saveInterval = setInterval(saveUserData, 5000);
-      return () => clearInterval(saveInterval);
+      saveInterval = setInterval(() => {
+        console.log('Triggering save...');
+        saveUserData();
+      }, 5000);
     }
+    return () => {
+      if (saveInterval) clearInterval(saveInterval);
+    };
   }, [userId, saveUserData]);
 
   const clickCookie = useCallback(() => {
