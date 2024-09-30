@@ -31,6 +31,10 @@ function App() {
   const lastSavedStateRef = useRef({ cookies: 0, buildings: initialGameState.buildings });
   const saveUserDataRef = useRef(null);
 
+  const calculateTotalCps = useCallback((buildings) => {
+    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
+  }, []);
+
   useEffect(() => {
     const initApp = () => {
       console.log("Initializing App...");
@@ -213,10 +217,6 @@ function App() {
       }
       return prevState;
     });
-  }, []);
-
-  const calculateTotalCps = useCallback((buildings) => {
-    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
   }, []);
 
   useEffect(() => {
