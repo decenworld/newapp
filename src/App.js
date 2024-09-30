@@ -37,39 +37,44 @@ function App() {
   const lastSaveTimeRef = useRef(Date.now());
   const saveTimeoutRef = useRef(null);
 
+  const loadTelegramScript = () => {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://telegram.org/js/telegram-web-app.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.body.appendChild(script);
+    });
+  };
+
   useEffect(() => {
-    // Check for Telegram WebApp data
-    if (window.Telegram && window.Telegram.WebApp) {
-      const initData = window.Telegram.WebApp.initData;
-      if (initData) {
-        try {
-          const parsedData = JSON.parse(initData);
-          if (parsedData.user && parsedData.user.id) {
-            setUserId(parsedData.user.id.toString());
+    const initTelegram = async () => {
+      try {
+        await loadTelegramScript();
+        if (window.Telegram && window.Telegram.WebApp) {
+          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+          if (initDataUnsafe && initDataUnsafe.user) {
+            setUserId(initDataUnsafe.user.id.toString());
+            console.log('User ID set:', initDataUnsafe.user.id.toString());
           } else {
-            console.log('Telegram user data not available');
+            console.error('Telegram user data not available');
             setUserId('anonymous');
           }
-        } catch (error) {
-          console.error('Error parsing Telegram init data:', error);
+        } else {
+          console.error('Telegram WebApp not available');
           setUserId('anonymous');
         }
-      } else {
-        console.log('Telegram init data not available');
+      } catch (error) {
+        console.error('Failed to load Telegram script:', error);
         setUserId('anonymous');
       }
-    } else {
-      console.log('Telegram WebApp not available');
-      setUserId('anonymous');
-    }
+    };
+
+    initTelegram();
   }, []);
 
   const loadGameData = useCallback(async () => {
-    if (!userId || userId === 'anonymous') {
-      setGameState(initialGameState);
-      setIsLoading(false);
-      return;
-    }
+    if (!userId) return;
 
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
@@ -83,13 +88,15 @@ function App() {
           ...data.gameState,
           buildings: data.gameState.buildings || initialGameState.buildings,
         }));
+        setUnlockedAchievements(data.achievements || []);
       } else {
         setGameState(initialGameState);
+        setUnlockedAchievements([]);
       }
-      setUnlockedAchievements(data.achievements || []);
     } catch (error) {
       console.error('Error loading user data:', error);
       setGameState(initialGameState);
+      setUnlockedAchievements([]);
     } finally {
       setIsLoading(false);
     }
@@ -111,14 +118,21 @@ function App() {
     }
 
     console.log('Saving game at:', new Date().toISOString());
+    console.log('Current userId:', userId);
+
     lastSaveTimeRef.current = now;
 
     const currentState = {
-      userId,
+      userId: userId, // Use the actual userId, not 'anonymous'
       cookies_collected: Number(Math.floor(gameState.cookies)),
-      buildings_data: JSON.stringify(gameState.buildings),
+      buildings_data: JSON.stringify(gameState.buildings.map(building => ({
+        name: building.name,
+        count: Number(building.count)
+      }))),
       achievements: JSON.stringify(unlockedAchievements),
     };
+
+    console.log('Attempting to save game state:', JSON.stringify(currentState));
 
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
