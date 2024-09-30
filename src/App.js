@@ -34,7 +34,6 @@ function App() {
     const initApp = () => {
       console.log("Initializing App...");
       
-      // Parse the URL parameters
       const urlParams = new URLSearchParams(window.location.hash.slice(1));
       const tgWebAppData = urlParams.get('tgWebAppData');
       
@@ -89,13 +88,16 @@ function App() {
       const savedData = await response.json();
       console.log("Loaded user data:", savedData);
 
-      if (savedData && savedData.cookies !== undefined && savedData.buildings) {
+      if (savedData && savedData.cookies_collected !== undefined && savedData.buildings_data) {
         setGameState(prevState => ({
           ...prevState,
-          cookies: savedData.cookies,
-          buildings: savedData.buildings,
+          cookies: savedData.cookies_collected,
+          buildings: JSON.parse(savedData.buildings_data),
         }));
-        setLastSavedState(savedData);
+        setLastSavedState({
+          cookies: savedData.cookies_collected,
+          buildings: JSON.parse(savedData.buildings_data),
+        });
         console.log('Game state loaded successfully for user:', userId);
       } else {
         console.log('Invalid saved data format, using initial game state for user:', userId);
@@ -115,7 +117,7 @@ function App() {
     if (!userId) return;
 
     const currentState = {
-      cookies: gameState.cookies,
+      cookies: Math.floor(gameState.cookies),
       buildings: gameState.buildings,
     };
 
@@ -126,7 +128,11 @@ function App() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ userId, gameState: currentState }),
+          body: JSON.stringify({
+            userId,
+            cookies: currentState.cookies,
+            buildings: currentState.buildings,
+          }),
         });
 
         if (!response.ok) {
@@ -142,7 +148,7 @@ function App() {
   }, [gameState, lastSavedState, userId]);
 
   useEffect(() => {
-    const saveInterval = setInterval(saveUserData, 5000);
+    const saveInterval = setInterval(saveUserData, 10000); // Save every 10 seconds
     return () => clearInterval(saveInterval);
   }, [saveUserData]);
 
