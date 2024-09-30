@@ -72,6 +72,7 @@ function App() {
           const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
           if (initDataUnsafe && initDataUnsafe.user) {
             setUserId(initDataUnsafe.user.id.toString());
+            console.log('User ID set:', initDataUnsafe.user.id.toString());
           } else {
             console.error('Telegram user data not available');
           }
@@ -86,33 +87,8 @@ function App() {
     initTelegram();
   }, []);
 
-  const loadGame = useCallback(async () => {
-    if (!userId) return;
-
-    try {
-      const response = await fetch(`/.netlify/functions/load-user-data?userId=${userId}`);
-      if (!response.ok) throw new Error('Failed to load game');
-
-      const data = await response.json();
-      if (data.cookies_collected !== undefined) {
-        setGameState(prevState => ({
-          ...prevState,
-          cookies: data.cookies_collected,
-          buildings: JSON.parse(data.buildings_data),
-          cps: calculateTotalCps(JSON.parse(data.buildings_data)),
-        }));
-        setUnlockedAchievements(JSON.parse(data.achievements) || []);
-      }
-      setLoadError(null);
-      setIsOffline(false);
-    } catch (error) {
-      console.error('Failed to load game:', error);
-      setLoadError(error.message);
-      setIsOffline(!navigator.onLine);
-    }
-  }, [userId, calculateTotalCps]);
-
   const saveGame = useCallback(async () => {
+    console.log('Attempting to save game...');
     if (!userId) {
       console.error('Cannot save game: userId is not set');
       return;
@@ -125,13 +101,7 @@ function App() {
       achievements: JSON.stringify(unlockedAchievements),
     };
 
-    // Only save if the state has changed
-    if (JSON.stringify(currentState) === JSON.stringify(lastSavedState.current)) {
-      console.log('State unchanged, skipping save');
-      return;
-    }
-
-    console.log('Attempting to save game state:', currentState);
+    console.log('Saving game state:', currentState);
 
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
@@ -141,7 +111,7 @@ function App() {
       });
 
       const responseText = await response.text();
-      console.log('Raw response:', responseText);
+      console.log('Raw save response:', responseText);
 
       if (!response.ok) {
         throw new Error(`Failed to save game: ${response.status} ${response.statusText}. ${responseText}`);
@@ -150,7 +120,6 @@ function App() {
       const result = JSON.parse(responseText);
       console.log('Save result:', result);
 
-      lastSavedState.current = currentState;
       setSaveError(null);
       setIsOffline(false);
     } catch (error) {
@@ -161,23 +130,13 @@ function App() {
   }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
-    if (userId) {
-      loadGame();
-    }
-  }, [userId, loadGame]);
-
-  useEffect(() => {
     const saveInterval = setInterval(() => {
-      if (userId) {
-        console.log('Triggering save game...');
-        saveGame();
-      } else {
-        console.log('Save skipped: userId is null');
-      }
+      console.log('Save interval triggered');
+      saveGame();
     }, 5000);
 
     return () => clearInterval(saveInterval);
-  }, [userId, saveGame]);
+  }, [saveGame]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -210,6 +169,7 @@ function App() {
   }, [gameState, checkAchievements]);
 
   const clickCookie = useCallback(() => {
+    console.log('Cookie clicked');
     setGameState(prevState => ({
       ...prevState,
       cookies: prevState.cookies + 1
@@ -217,9 +177,11 @@ function App() {
   }, []);
 
   const buyBuilding = useCallback((buildingName) => {
+    console.log('Attempting to buy building:', buildingName);
     setGameState(prevState => {
       const building = prevState.buildings.find(b => b.name === buildingName);
       if (building && prevState.cookies >= building.baseCost) {
+        console.log('Building purchased:', buildingName);
         const newBuildings = prevState.buildings.map(b => 
           b.name === buildingName ? {...b, count: b.count + 1} : b
         );
@@ -230,6 +192,7 @@ function App() {
           cps: calculateTotalCps(newBuildings)
         };
       }
+      console.log('Not enough cookies to buy building:', buildingName);
       return prevState;
     });
   }, [calculateTotalCps]);
