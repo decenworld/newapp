@@ -18,14 +18,33 @@ exports.handler = async (event, context) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const result = await conn.query(
-      'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP',
-      [userId, cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements), cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements)]
-    );
+
+    // Check if user exists
+    const [existingUser] = await conn.query('SELECT 1 FROM user_data WHERE user_id = ?', [userId]);
+    const userExists = existingUser && existingUser.length > 0;
+
+    let result;
+    if (userExists) {
+      // Update existing user
+      result = await conn.query(
+        'UPDATE user_data SET cookies_collected = ?, buildings_data = ?, achievements = ?, last_updated = CURRENT_TIMESTAMP WHERE user_id = ?',
+        [cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements), userId]
+      );
+    } else {
+      // Create new user
+      result = await conn.query(
+        'INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements) VALUES (?, ?, ?, ?)',
+        [userId, cookies_collected, JSON.stringify(buildings_data), JSON.stringify(achievements)]
+      );
+    }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Data saved successfully', result }),
+      body: JSON.stringify({ 
+        message: userExists ? 'Data updated successfully' : 'New user created and data saved',
+        newUser: !userExists,
+        result 
+      }),
     };
   } catch (error) {
     console.error('Error saving data:', error);

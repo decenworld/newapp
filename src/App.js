@@ -115,8 +115,15 @@ function App() {
 
       const result = await response.json();
       console.log('Save result:', result);
+
+      if (result.newUser) {
+        console.log('New user created');
+        // You might want to trigger some action here for new users
+      }
     } catch (error) {
       console.error('Error saving user data:', error);
+      // Implement retry logic
+      setTimeout(() => saveGame(), 5000); // Retry after 5 seconds
     }
   }, [userId, gameState, unlockedAchievements]);
 
@@ -127,9 +134,14 @@ function App() {
   }, [userId, loadGame]);
 
   useEffect(() => {
-    const saveInterval = setInterval(saveGame, 5000); // Save every 5 seconds
-    return () => clearInterval(saveInterval);
-  }, [saveGame]);
+    let saveInterval;
+    if (userId) {
+      saveInterval = setInterval(saveGame, 5000); // Save every 5 seconds
+    }
+    return () => {
+      if (saveInterval) clearInterval(saveInterval);
+    };
+  }, [userId, saveGame]);
 
   const checkAchievements = useCallback(() => {
     const newAchievements = achievements.filter(
