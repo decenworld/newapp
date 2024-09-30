@@ -87,7 +87,7 @@ function App() {
   }, []);
 
   const saveGame = useCallback(async () => {
-    console.log('Attempting to save game...');
+    console.log('saveGame function called at:', new Date().toISOString());
     if (!userId) {
       console.error('Cannot save game: userId is not set');
       return;
@@ -100,7 +100,7 @@ function App() {
       achievements: JSON.stringify(unlockedAchievements),
     };
 
-    console.log('Saving game state:', currentState);
+    console.log('Attempting to save game state:', JSON.stringify(currentState));
 
     try {
       const response = await fetch('/.netlify/functions/save-user-data', {
@@ -117,7 +117,7 @@ function App() {
       }
 
       const result = JSON.parse(responseText);
-      console.log('Save result:', result);
+      console.log('Save result:', JSON.stringify(result));
 
       saveErrorRef.current = null;
       isOfflineRef.current = false;
@@ -132,13 +132,16 @@ function App() {
 
   useEffect(() => {
     const forceSave = () => {
-      console.log('Force save triggered');
-      saveGame();
+      console.log('Force save triggered at:', new Date().toISOString());
+      saveGame().catch(error => console.error('Force save error:', error));
     };
 
     const saveInterval = setInterval(forceSave, 5000);
 
-    return () => clearInterval(saveInterval);
+    return () => {
+      console.log('Clearing save interval');
+      clearInterval(saveInterval);
+    };
   }, [saveGame]);
 
   useEffect(() => {
@@ -212,8 +215,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    console.log('Current game state:', gameState);
-    console.log('Current achievements:', unlockedAchievements);
+    console.log('Current game state:', JSON.stringify(gameState));
+    console.log('Current achievements:', JSON.stringify(unlockedAchievements));
     console.log('Last save attempt:', new Date(lastSaveAttemptRef.current).toISOString());
     console.log('Is offline:', isOfflineRef.current);
     console.log('Save error:', saveErrorRef.current);

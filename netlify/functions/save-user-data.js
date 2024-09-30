@@ -14,6 +14,7 @@ const pool = mariadb.createPool({
 exports.handler = async (event, context) => {
   console.log('Save function called at:', new Date().toISOString());
   console.log('Event:', JSON.stringify(event));
+  console.log('Context:', JSON.stringify(context));
 
   if (event.httpMethod !== 'POST') {
     console.error('Invalid HTTP method:', event.httpMethod);
@@ -66,6 +67,12 @@ exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Error saving data:', error);
     console.error('Error stack:', error.stack);
+    console.error('Database connection details:', {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      user: process.env.DB_USER,
+      database: process.env.DB_NAME,
+    });
     return {
       statusCode: 500,
       body: JSON.stringify({ 
