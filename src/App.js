@@ -27,7 +27,7 @@ const initialGameState = {
 
 };
 
-const FALLBACK_USER_ID = 'browser-test-user';
+const ANON_USER_ID = 'anon';
 
 function App() {
   const [userId, setUserId] = useState(null);
@@ -35,33 +35,74 @@ function App() {
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('Starting...');
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
 
   const loadTelegramScript = useCallback(() => {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://telegram.org/js/telegram-web-app.js';
-      script.onload = resolve;
-      script.onerror = reject;
-      document.body.appendChild(script);
+    return new Promise((resolve) => {
+      setLoadingStatus('Loading Telegram script...');
+      if (window.Telegram && window.Telegram.WebApp) {
+        console.log('Telegram WebApp already loaded');
+        resolve();
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://telegram.org/js/telegram-web-app.js';
+        script.onload = () => {
+          console.log('Telegram script loaded successfully');
+          resolve();
+        };
+        script.onerror = () => {
+          console.log('Failed to load Telegram script, proceeding with anon user');
+          resolve();
+        };
+        document.body.appendChild(script);
+      }
+    });
+  }, []);
+
+  const getUserId = useCallback(() => {
+    return new Promise((resolve) => {
+      setLoadingStatus('Getting user ID...');
+      if (window.Telegram && window.Telegram.WebApp) {
+        let timeoutId = setTimeout(() => {
+          console.log('Timed out waiting for Telegram user ID, using anon');
+          resolve(ANON_USER_ID);
+        }, 5000); // 5 second timeout
+
+        const checkTelegramData = () => {
+          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+          if (initDataUnsafe && initDataUnsafe.user) {
+            clearTimeout(timeoutId);
+            const id = initDataUnsafe.user.id.toString();
+            if (id !== 'anonymous' && !isNaN(Number(id))) {
+              console.log('Telegram user ID obtained:', id);
+              resolve(id);
+            } else {
+              console.log('Invalid Telegram user ID, using anon');
+              resolve(ANON_USER_ID);
+            }
+          } else {
+            setTimeout(checkTelegramData, 100);
+          }
+        };
+        checkTelegramData();
+      } else {
+        console.log('Telegram WebApp not available, using anon user ID');
+        resolve(ANON_USER_ID);
+      }
     });
   }, []);
 
   const loadGameData = useCallback(async (id) => {
+    setLoadingStatus('Loading game data...');
     try {
-      let data;
-      if (id === FALLBACK_USER_ID) {
-        const savedData = localStorage.getItem('gameState');
-        data = savedData ? JSON.parse(savedData) : null;
-      } else {
-        const response = await fetch(`/.netlify/functions/load-user-data?userId=${id}`);
-        if (!response.ok) {
-          throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
-        }
-        data = await response.json();
+      const response = await fetch(`/.netlify/functions/load-user-data?userId=${id}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
       }
+      const data = await response.json();
       
       console.log('Loaded game data:', data);
       
@@ -86,30 +127,8 @@ function App() {
     } finally {
       setIsLoading(false);
       setIsInitialLoadDone(true);
+      setLoadingStatus('Game loaded');
     }
-  }, []);
-
-  const getUserId = useCallback(() => {
-    return new Promise((resolve) => {
-      const checkTelegramData = () => {
-        if (window.Telegram && window.Telegram.WebApp) {
-          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-          if (initDataUnsafe && initDataUnsafe.user) {
-            const id = initDataUnsafe.user.id.toString();
-            if (id !== 'anonymous' && !isNaN(Number(id))) {
-              resolve(id);
-            } else {
-              resolve(FALLBACK_USER_ID);
-            }
-          } else {
-            setTimeout(checkTelegramData, 100);
-          }
-        } else {
-          resolve(FALLBACK_USER_ID);
-        }
-      };
-      checkTelegramData();
-    });
   }, []);
 
   useEffect(() => {
@@ -122,12 +141,16 @@ function App() {
         await loadGameData(id);
       } catch (error) {
         console.error('Failed to initialize game:', error);
-        setUserId(FALLBACK_USER_ID);
-        await loadGameData(FALLBACK_USER_ID);
+        setUserId(ANON_USER_ID);
+        await loadGameData(ANON_USER_ID);
       }
     };
 
-    initGame();
+    initGame().catch(error => {
+      console.error('Unhandled error during game initialization:', error);
+      setIsLoading(false);
+      setLoadingStatus('Failed to load game. Please refresh the page.');
+    });
   }, [loadTelegramScript, getUserId, loadGameData]);
 
   const saveGame = useCallback(() => {
@@ -157,38 +180,30 @@ function App() {
 
     console.log('Attempting to save game state:', JSON.stringify(currentState));
 
-    if (userId === FALLBACK_USER_ID) {
-      localStorage.setItem('gameState', JSON.stringify({ gameState: currentState }));
-      console.log('Game saved successfully to localStorage');
-      saveErrorRef.current = null;
-      isOfflineRef.current = false;
-      lastSaveTimeRef.current = now;
-    } else {
-      fetch('/.netlify/functions/save-user-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentState),
+    fetch('/.netlify/functions/save-user-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentState),
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
       })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
-          }
-          return response.json();
-        })
-        .then(() => {
-          console.log('Game saved successfully');
-          saveErrorRef.current = null;
-          isOfflineRef.current = false;
-        })
-        .catch(error => {
-          console.error('Error saving user data:', error);
-          saveErrorRef.current = error.message;
-          isOfflineRef.current = !navigator.onLine;
-        })
-        .finally(() => {
-          lastSaveTimeRef.current = now;
-        });
-    }
+      .then(() => {
+        console.log('Game saved successfully');
+        saveErrorRef.current = null;
+        isOfflineRef.current = false;
+      })
+      .catch(error => {
+        console.error('Error saving user data:', error);
+        saveErrorRef.current = error.message;
+        isOfflineRef.current = !navigator.onLine;
+      })
+      .finally(() => {
+        lastSaveTimeRef.current = now;
+      });
   }, [userId, gameState, unlockedAchievements, isInitialLoadDone]);
 
   useEffect(() => {
@@ -342,7 +357,10 @@ function App() {
       isOffline: isOfflineRef.current
     }}>
       {isLoading ? (
-        <div>Loading...</div>
+        <div>
+          <p>Loading... {loadingStatus}</p>
+          <p>User ID: {userId || 'Not available yet'}</p>
+        </div>
       ) : (
         <>
           {(saveErrorRef.current) && <div className="error-message">Error: {saveErrorRef.current}</div>}
@@ -357,6 +375,7 @@ function App() {
               <p>User ID: {userId || 'Not available'}</p>
               <p>URL: {window.location.href}</p>
               <p>Initial Load Done: {isInitialLoadDone ? 'Yes' : 'No'}</p>
+              <p>Loading Status: {loadingStatus}</p>
             </div>
           </div>
         </>
