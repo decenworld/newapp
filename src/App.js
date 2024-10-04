@@ -38,7 +38,6 @@ function App() {
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
-  const userIdRetryCountRef = useRef(0);
 
   const loadTelegramScript = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -54,11 +53,9 @@ function App() {
     try {
       let data;
       if (id === FALLBACK_USER_ID) {
-        // Load from localStorage for fallback user
         const savedData = localStorage.getItem('gameState');
         data = savedData ? JSON.parse(savedData) : null;
       } else {
-        // Load from database for regular users
         const response = await fetch(`/.netlify/functions/load-user-data?userId=${id}`);
         if (!response.ok) {
           throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
@@ -78,6 +75,7 @@ function App() {
         });
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
       } else {
+        console.log('No existing game data found. Creating new game state.');
         setGameState(initialGameState);
         setUnlockedAchievements([]);
       }
@@ -91,64 +89,56 @@ function App() {
     }
   }, []);
 
-  const getUserId = useCallback(async () => {
-    if (window.Telegram && window.Telegram.WebApp) {
-      const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-      if (initDataUnsafe && initDataUnsafe.user) {
-        const id = initDataUnsafe.user.id.toString();
-        if (id !== 'anonymous' && !isNaN(Number(id))) {
-          setUserId(id);
-          console.log('User ID set:', id);
-          await loadGameData(id);
+  const getUserId = useCallback(() => {
+    return new Promise((resolve) => {
+      const checkTelegramData = () => {
+        if (window.Telegram && window.Telegram.WebApp) {
+          const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+          if (initDataUnsafe && initDataUnsafe.user) {
+            const id = initDataUnsafe.user.id.toString();
+            if (id !== 'anonymous' && !isNaN(Number(id))) {
+              resolve(id);
+            } else {
+              resolve(FALLBACK_USER_ID);
+            }
+          } else {
+            setTimeout(checkTelegramData, 100);
+          }
         } else {
-          throw new Error('Invalid user ID');
+          resolve(FALLBACK_USER_ID);
         }
-      } else {
-        throw new Error('Telegram user data not available');
-      }
-    } else {
-      // Fallback for browser testing
-      console.log('Telegram WebApp not available, using fallback user ID');
-      setUserId(FALLBACK_USER_ID);
-      await loadGameData(FALLBACK_USER_ID);
-    }
-  }, [loadGameData]);
+      };
+      checkTelegramData();
+    });
+  }, []);
 
   useEffect(() => {
-    const initTelegram = async () => {
+    const initGame = async () => {
       try {
         await loadTelegramScript();
-        await getUserId();
+        const id = await getUserId();
+        setUserId(id);
+        console.log('User ID set:', id);
+        await loadGameData(id);
       } catch (error) {
-        console.error('Failed to get user ID:', error);
-        if (userIdRetryCountRef.current < 5) {
-          userIdRetryCountRef.current++;
-          setTimeout(initTelegram, 1000);
-        } else {
-          console.error('Failed to get user ID after 5 attempts');
-          setUserId(FALLBACK_USER_ID);
-          await loadGameData(FALLBACK_USER_ID);
-        }
+        console.error('Failed to initialize game:', error);
+        setUserId(FALLBACK_USER_ID);
+        await loadGameData(FALLBACK_USER_ID);
       }
     };
 
-    initTelegram();
+    initGame();
   }, [loadTelegramScript, getUserId, loadGameData]);
 
   const saveGame = useCallback(() => {
-    if (!isInitialLoadDone) {
-      console.log('Initial load not done yet, skipping save');
+    if (!isInitialLoadDone || !userId || !gameState) {
+      console.log('Not ready to save yet. Skipping save.');
       return;
     }
 
     const now = Date.now();
     if (now - lastSaveTimeRef.current < 10000) {
       console.log('Last save was less than 10 seconds ago, skipping this save');
-      return;
-    }
-
-    if (!userId || !gameState) {
-      console.log('UserId or gameState not available, skipping save');
       return;
     }
 
@@ -168,14 +158,12 @@ function App() {
     console.log('Attempting to save game state:', JSON.stringify(currentState));
 
     if (userId === FALLBACK_USER_ID) {
-      // Save to localStorage for fallback user
       localStorage.setItem('gameState', JSON.stringify({ gameState: currentState }));
       console.log('Game saved successfully to localStorage');
       saveErrorRef.current = null;
       isOfflineRef.current = false;
       lastSaveTimeRef.current = now;
     } else {
-      // Save to database for regular users
       fetch('/.netlify/functions/save-user-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
