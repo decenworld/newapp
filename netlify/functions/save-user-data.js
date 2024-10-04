@@ -62,20 +62,35 @@ exports.handler = async (event, context) => {
     conn = await pool.getConnection();
     console.log('Database connection established');
 
-    const query = `
-      INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements)
-      VALUES (?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        cookies_collected = VALUES(cookies_collected),
-        buildings_data = VALUES(buildings_data),
-        achievements = VALUES(achievements),
-        last_updated = CURRENT_TIMESTAMP
-    `;
+    // First, check if the user exists
+    const checkUserQuery = 'SELECT user_id FROM user_data WHERE user_id = ?';
+    const userExists = await conn.query(checkUserQuery, [userId]);
+
+    let query;
+    if (userExists.length > 0) {
+      // User exists, update the data
+      query = `
+        UPDATE user_data
+        SET cookies_collected = ?,
+            buildings_data = ?,
+            achievements = ?,
+            last_updated = CURRENT_TIMESTAMP
+        WHERE user_id = ?
+      `;
+      console.log('Updating existing user data');
+    } else {
+      // User doesn't exist, insert new data
+      query = `
+        INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements)
+        VALUES (?, ?, ?, ?)
+      `;
+      console.log('Inserting new user data');
+    }
 
     console.log('Executing query:', query);
-    console.log('Query parameters:', [userId, cookies_collected, buildings_data, achievements]);
+    console.log('Query parameters:', [cookies_collected, buildings_data, achievements, userId]);
 
-    const result = await conn.query(query, [userId, cookies_collected, buildings_data, achievements]);
+    const result = await conn.query(query, [cookies_collected, buildings_data, achievements, userId]);
     const safeResult = convertBigIntToNumber(result);
     console.log('Save result:', JSON.stringify(safeResult));
 

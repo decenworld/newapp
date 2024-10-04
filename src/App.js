@@ -109,23 +109,19 @@ function App() {
       
       if (data && data.gameState) {
         const parsedBuildingsData = JSON.parse(data.gameState.buildings_data);
-        setGameState({
-          cookies: Number(data.gameState.cookies_collected) || 0,
-          buildings: parsedBuildingsData.buildings || initialGameState.buildings,
-          cps: calculateTotalCps(parsedBuildingsData.buildings || initialGameState.buildings),
-          upgrades: parsedBuildingsData.upgrades || initialGameState.upgrades,
-        });
+        setGameState(prevState => ({
+          cookies: Number(data.gameState.cookies_collected) || prevState.cookies,
+          buildings: parsedBuildingsData.buildings || prevState.buildings,
+          cps: calculateTotalCps(parsedBuildingsData.buildings || prevState.buildings),
+          upgrades: parsedBuildingsData.upgrades || prevState.upgrades,
+        }));
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
         console.log('Game state set successfully');
       } else {
-        console.log('No existing game data found. Creating new game state.');
-        setGameState(initialGameState);
-        setUnlockedAchievements([]);
+        console.log('No existing game data found. Using current game state.');
       }
     } catch (error) {
       console.error('Error loading user data:', error);
-      setGameState(initialGameState);
-      setUnlockedAchievements([]);
     } finally {
       setIsLoading(false);
       setIsInitialLoadDone(true);
@@ -138,9 +134,9 @@ function App() {
       try {
         await loadTelegramScript();
         const id = await getUserId();
-        setUserId(id);
-        console.log('User ID set:', id);
+        console.log('User ID retrieved:', id);
         if (id) {
+          setUserId(id);
           await loadGameData(id);
         } else {
           console.error('User ID is null or undefined');
@@ -154,11 +150,7 @@ function App() {
       }
     };
 
-    initGame().catch(error => {
-      console.error('Unhandled error during game initialization:', error);
-      setIsLoading(false);
-      setLoadingStatus('Failed to load game. Please refresh the page.');
-    });
+    initGame();
   }, [loadTelegramScript, getUserId, loadGameData]);
 
   const saveGame = useCallback(() => {
