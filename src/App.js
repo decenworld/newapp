@@ -97,6 +97,7 @@ function App() {
 
   const loadGameData = useCallback(async (id) => {
     setLoadingStatus('Loading game data...');
+    console.log('Attempting to load game data for user ID:', id);
     try {
       const response = await fetch(`/.netlify/functions/load-user-data?userId=${id}`);
       if (!response.ok) {
@@ -115,6 +116,7 @@ function App() {
           upgrades: parsedBuildingsData.upgrades || initialGameState.upgrades,
         });
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
+        console.log('Game state set successfully');
       } else {
         console.log('No existing game data found. Creating new game state.');
         setGameState(initialGameState);
@@ -129,7 +131,7 @@ function App() {
       setIsInitialLoadDone(true);
       setLoadingStatus('Game loaded');
     }
-  }, []);
+  }, [calculateTotalCps]);
 
   useEffect(() => {
     const initGame = async () => {
@@ -138,7 +140,13 @@ function App() {
         const id = await getUserId();
         setUserId(id);
         console.log('User ID set:', id);
-        await loadGameData(id);
+        if (id) {
+          await loadGameData(id);
+        } else {
+          console.error('User ID is null or undefined');
+          setIsLoading(false);
+          setLoadingStatus('Failed to get user ID');
+        }
       } catch (error) {
         console.error('Failed to initialize game:', error);
         setUserId(ANON_USER_ID);
