@@ -27,6 +27,8 @@ const initialGameState = {
 
 };
 
+const FALLBACK_USER_ID = 'browser-test-user';
+
 function App() {
   const [userId, setUserId] = useState(null);
   const [gameState, setGameState] = useState(null);
@@ -36,6 +38,7 @@ function App() {
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
   const userIdRetryCountRef = useRef(0);
+  const isInitialLoadDoneRef = useRef(false);
 
   const loadTelegramScript = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -49,18 +52,28 @@ function App() {
 
   const loadGameData = useCallback(async (id) => {
     try {
-      const response = await fetch(`/.netlify/functions/load-user-data?userId=${id}`);
-      if (!response.ok) {
-        throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
+      let data;
+      if (id === FALLBACK_USER_ID) {
+        // Load from localStorage for fallback user
+        const savedData = localStorage.getItem('gameState');
+        data = savedData ? JSON.parse(savedData) : null;
+      } else {
+        // Load from database for regular users
+        const response = await fetch(`/.netlify/functions/load-user-data?userId=${id}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load game data: ${response.status} ${response.statusText}`);
+        }
+        data = await response.json();
       }
-      const data = await response.json();
+      
       console.log('Loaded game data:', data);
       
-      if (data.gameState) {
+      if (data && data.gameState) {
         setGameState({
           cookies: Number(data.gameState.cookies_collected) || 0,
-          buildings: JSON.parse(data.gameState.buildings_data) || [],
-          cps: 0, // You'll need to calculate this based on the buildings
+          buildings: JSON.parse(data.gameState.buildings_data) || initialGameState.buildings,
+          cps: calculateTotalCps(JSON.parse(data.gameState.buildings_data) || initialGameState.buildings),
+          upgrades: JSON.parse(data.gameState.upgrades) || initialGameState.upgrades,
         });
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
       } else {
@@ -73,6 +86,7 @@ function App() {
       setUnlockedAchievements([]);
     } finally {
       setIsLoading(false);
+      isInitialLoadDoneRef.current = true;
     }
   }, []);
 
@@ -92,7 +106,10 @@ function App() {
         throw new Error('Telegram user data not available');
       }
     } else {
-      throw new Error('Telegram WebApp not available');
+      // Fallback for browser testing
+      console.log('Telegram WebApp not available, using fallback user ID');
+      setUserId(FALLBACK_USER_ID);
+      await loadGameData(FALLBACK_USER_ID);
     }
   }, [loadGameData]);
 
@@ -108,15 +125,21 @@ function App() {
           setTimeout(initTelegram, 1000);
         } else {
           console.error('Failed to get user ID after 5 attempts');
-          setIsLoading(false);
+          setUserId(FALLBACK_USER_ID);
+          await loadGameData(FALLBACK_USER_ID);
         }
       }
     };
 
     initTelegram();
-  }, [loadTelegramScript, getUserId]);
+  }, [loadTelegramScript, getUserId, loadGameData]);
 
   const saveGame = useCallback(() => {
+    if (!isInitialLoadDoneRef.current) {
+      console.log('Initial load not done yet, skipping save');
+      return;
+    }
+
     const now = Date.now();
     if (now - lastSaveTimeRef.current < 10000) {
       console.log('Last save was less than 10 seconds ago, skipping this save');
@@ -136,34 +159,45 @@ function App() {
       cookies_collected: Number(Math.floor(gameState.cookies)),
       buildings_data: JSON.stringify(gameState.buildings),
       achievements: JSON.stringify(unlockedAchievements),
+      upgrades: JSON.stringify(gameState.upgrades),
     };
 
     console.log('Attempting to save game state:', JSON.stringify(currentState));
 
-    fetch('/.netlify/functions/save-user-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(currentState),
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
-        }
-        return response.json();
+    if (userId === FALLBACK_USER_ID) {
+      // Save to localStorage for fallback user
+      localStorage.setItem('gameState', JSON.stringify({ gameState: currentState }));
+      console.log('Game saved successfully to localStorage');
+      saveErrorRef.current = null;
+      isOfflineRef.current = false;
+      lastSaveTimeRef.current = now;
+    } else {
+      // Save to database for regular users
+      fetch('/.netlify/functions/save-user-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentState),
       })
-      .then(() => {
-        console.log('Game saved successfully');
-        saveErrorRef.current = null;
-        isOfflineRef.current = false;
-      })
-      .catch(error => {
-        console.error('Error saving user data:', error);
-        saveErrorRef.current = error.message;
-        isOfflineRef.current = !navigator.onLine;
-      })
-      .finally(() => {
-        lastSaveTimeRef.current = now;
-      });
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Failed to save game: ${response.status} ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(() => {
+          console.log('Game saved successfully');
+          saveErrorRef.current = null;
+          isOfflineRef.current = false;
+        })
+        .catch(error => {
+          console.error('Error saving user data:', error);
+          saveErrorRef.current = error.message;
+          isOfflineRef.current = !navigator.onLine;
+        })
+        .finally(() => {
+          lastSaveTimeRef.current = now;
+        });
+    }
   }, [userId, gameState, unlockedAchievements]);
 
   useEffect(() => {
