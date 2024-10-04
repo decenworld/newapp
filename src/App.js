@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import Game from './components/Game';
-import { achievements } from './achievements';  // Make sure this path is correct
+import { achievements } from './achievements';
 
 export const GameContext = createContext();
 
@@ -69,11 +69,12 @@ function App() {
       console.log('Loaded game data:', data);
       
       if (data && data.gameState) {
+        const parsedBuildingsData = JSON.parse(data.gameState.buildings_data);
         setGameState({
           cookies: Number(data.gameState.cookies_collected) || 0,
-          buildings: JSON.parse(data.gameState.buildings_data) || initialGameState.buildings,
-          cps: calculateTotalCps(JSON.parse(data.gameState.buildings_data) || initialGameState.buildings),
-          upgrades: JSON.parse(data.gameState.upgrades) || initialGameState.upgrades,
+          buildings: parsedBuildingsData.buildings || initialGameState.buildings,
+          cps: calculateTotalCps(parsedBuildingsData.buildings || initialGameState.buildings),
+          upgrades: parsedBuildingsData.upgrades || initialGameState.upgrades,
         });
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
       } else {
@@ -333,10 +334,6 @@ function App() {
 
   console.log('App rendered, userId:', userId);
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
   return (
     <GameContext.Provider value={{ 
       gameState, 
@@ -349,19 +346,25 @@ function App() {
       saveError: saveErrorRef.current,
       isOffline: isOfflineRef.current
     }}>
-      {(saveErrorRef.current) && <div className="error-message">Error: {saveErrorRef.current}</div>}
-      {isOfflineRef.current && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
-      <div className="App">
-        <Game />
-        <button onClick={() => window.open('/.netlify/functions/download-data', '_blank')}>
-          Download Game Data
-        </button>
-        <div>
-          <h3>Debug Info:</h3>
-          <p>User ID: {userId || 'Not available'}</p>
-          <p>URL: {window.location.href}</p>
-        </div>
-      </div>
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+          {(saveErrorRef.current) && <div className="error-message">Error: {saveErrorRef.current}</div>}
+          {isOfflineRef.current && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
+          <div className="App">
+            <Game />
+            <button onClick={() => window.open('/.netlify/functions/download-data', '_blank')}>
+              Download Game Data
+            </button>
+            <div>
+              <h3>Debug Info:</h3>
+              <p>User ID: {userId || 'Not available'}</p>
+              <p>URL: {window.location.href}</p>
+            </div>
+          </div>
+        </>
+      )}
     </GameContext.Provider>
   );
 }
