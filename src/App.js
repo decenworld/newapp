@@ -120,7 +120,7 @@ function App() {
           cookies: Number(data.gameState.cookies_collected) || prevState.cookies,
           buildings: parsedBuildingsData.buildings || prevState.buildings,
           cps: calculateTotalCps(parsedBuildingsData.buildings || prevState.buildings),
-          upgrades: parsedBuildingsData.upgrades || prevState.upgrades,
+          upgrades: prevState.upgrades, // Keep existing upgrades or use default
         }));
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
         console.log('Game state set successfully');

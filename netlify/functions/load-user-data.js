@@ -9,6 +9,22 @@ const pool = mariadb.createPool({
   connectionLimit: 5,
 });
 
+// Helper function to recursively convert BigInt to Number
+const convertBigIntToNumber = (obj) => {
+  if (typeof obj === 'bigint') {
+    return Number(obj);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(convertBigIntToNumber);
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([key, value]) => [key, convertBigIntToNumber(value)])
+    );
+  }
+  return obj;
+};
+
 exports.handler = async (event) => {
   const { userId } = event.queryStringParameters;
   console.log('Load function called for userId:', userId);
@@ -45,7 +61,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const userData = rows[0];
+    const userData = convertBigIntToNumber(rows[0]);
     console.log('User data found:', JSON.stringify(userData));
     return {
       statusCode: 200,
@@ -54,7 +70,6 @@ exports.handler = async (event) => {
           cookies_collected: userData.cookies_collected,
           buildings_data: userData.buildings_data,
           achievements: userData.achievements,
-          upgrades: userData.upgrades,
         },
       }),
     };
