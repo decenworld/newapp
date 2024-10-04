@@ -34,11 +34,11 @@ function App() {
   const [gameState, setGameState] = useState(null);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
   const userIdRetryCountRef = useRef(0);
-  const isInitialLoadDoneRef = useRef(false);
 
   const loadTelegramScript = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -87,7 +87,7 @@ function App() {
       setUnlockedAchievements([]);
     } finally {
       setIsLoading(false);
-      isInitialLoadDoneRef.current = true;
+      setIsInitialLoadDone(true);
     }
   }, []);
 
@@ -136,7 +136,7 @@ function App() {
   }, [loadTelegramScript, getUserId, loadGameData]);
 
   const saveGame = useCallback(() => {
-    if (!isInitialLoadDoneRef.current) {
+    if (!isInitialLoadDone) {
       console.log('Initial load not done yet, skipping save');
       return;
     }
@@ -201,12 +201,19 @@ function App() {
           lastSaveTimeRef.current = now;
         });
     }
-  }, [userId, gameState, unlockedAchievements]);
+  }, [userId, gameState, unlockedAchievements, isInitialLoadDone]);
 
   useEffect(() => {
-    const saveInterval = setInterval(saveGame, 10000);
-    return () => clearInterval(saveInterval);
-  }, [saveGame]);
+    let saveInterval;
+    if (isInitialLoadDone) {
+      saveInterval = setInterval(saveGame, 10000);
+    }
+    return () => {
+      if (saveInterval) {
+        clearInterval(saveInterval);
+      }
+    };
+  }, [saveGame, isInitialLoadDone]);
 
   const calculateTotalCps = useCallback((buildings) => {
     return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
@@ -361,6 +368,7 @@ function App() {
               <h3>Debug Info:</h3>
               <p>User ID: {userId || 'Not available'}</p>
               <p>URL: {window.location.href}</p>
+              <p>Initial Load Done: {isInitialLoadDone ? 'Yes' : 'No'}</p>
             </div>
           </div>
         </>
