@@ -42,19 +42,11 @@ exports.handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
-  const { userId, cookies_collected, buildings_data, achievements, upgrades } = data;
+  const { userId, cookies_collected, buildings_data, achievements } = data;
 
   if (!userId) {
     console.error('Missing userId in request');
     return { statusCode: 400, body: JSON.stringify({ error: 'userId is required' }) };
-  }
-
-  // For the fallback user, return a success response without saving to the database
-  if (userId === 'browser-test-user') {
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'Data saved successfully (fallback user)' }),
-    };
   }
 
   let conn;
@@ -63,20 +55,19 @@ exports.handler = async (event, context) => {
     console.log('Database connection established');
 
     const query = `
-      INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements, upgrades)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements)
+      VALUES (?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         cookies_collected = VALUES(cookies_collected),
         buildings_data = VALUES(buildings_data),
         achievements = VALUES(achievements),
-        upgrades = VALUES(upgrades),
         last_updated = CURRENT_TIMESTAMP
     `;
 
     console.log('Executing query:', query);
-    console.log('Query parameters:', [userId, cookies_collected, buildings_data, achievements, upgrades]);
+    console.log('Query parameters:', [userId, cookies_collected, buildings_data, achievements]);
 
-    const result = await conn.query(query, [userId, cookies_collected, buildings_data, achievements, upgrades]);
+    const result = await conn.query(query, [userId, cookies_collected, buildings_data, achievements]);
     const safeResult = convertBigIntToNumber(result);
     console.log('Save result:', JSON.stringify(safeResult));
 
