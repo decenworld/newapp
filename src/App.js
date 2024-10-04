@@ -6,7 +6,7 @@ export const GameContext = createContext();
 
 const initialGameState = {
   cookies: 0,
-  cps: 0,  // Add this line to include CPS in the initial state
+  cps: 0,
   buildings: [
     { name: "Cursor", baseCost: 15, baseCps: 0.1, count: 0 },
     { name: "Grandma", baseCost: 100, baseCps: 1, count: 0 },
@@ -24,14 +24,13 @@ const initialGameState = {
     unshackled: Array(20).fill(false),
   },
   achievements: [],
-
 };
 
 const ANON_USER_ID = 'anon';
 
 function App() {
   const [userId, setUserId] = useState(null);
-  const [gameState, setGameState] = useState(null);
+  const [gameState, setGameState] = useState(initialGameState);
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
@@ -39,6 +38,14 @@ function App() {
   const saveErrorRef = useRef(null);
   const isOfflineRef = useRef(false);
   const lastSaveTimeRef = useRef(Date.now());
+
+  const calculateTotalCps = useCallback((buildings) => {
+    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
+  }, []);
+
+  const calculateBuildingCost = useCallback((building) => {
+    return Math.floor(building.baseCost * Math.pow(1.15, building.count));
+  }, []);
 
   const loadTelegramScript = useCallback(() => {
     return new Promise((resolve) => {
@@ -118,40 +125,18 @@ function App() {
         setUnlockedAchievements(JSON.parse(data.gameState.achievements) || []);
         console.log('Game state set successfully');
       } else {
-        console.log('No existing game data found. Using current game state.');
+        console.log('No existing game data found. Using initial game state.');
+        setGameState(initialGameState);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
+      setGameState(initialGameState);
     } finally {
       setIsLoading(false);
       setIsInitialLoadDone(true);
       setLoadingStatus('Game loaded');
     }
   }, [calculateTotalCps]);
-
-  useEffect(() => {
-    const initGame = async () => {
-      try {
-        await loadTelegramScript();
-        const id = await getUserId();
-        console.log('User ID retrieved:', id);
-        if (id) {
-          setUserId(id);
-          await loadGameData(id);
-        } else {
-          console.error('User ID is null or undefined');
-          setIsLoading(false);
-          setLoadingStatus('Failed to get user ID');
-        }
-      } catch (error) {
-        console.error('Failed to initialize game:', error);
-        setUserId(ANON_USER_ID);
-        await loadGameData(ANON_USER_ID);
-      }
-    };
-
-    initGame();
-  }, [loadTelegramScript, getUserId, loadGameData]);
 
   const saveGame = useCallback(() => {
     if (!isInitialLoadDone || !userId || !gameState) {
@@ -206,26 +191,6 @@ function App() {
       });
   }, [userId, gameState, unlockedAchievements, isInitialLoadDone]);
 
-  useEffect(() => {
-    let saveInterval;
-    if (isInitialLoadDone) {
-      saveInterval = setInterval(saveGame, 10000);
-    }
-    return () => {
-      if (saveInterval) {
-        clearInterval(saveInterval);
-      }
-    };
-  }, [saveGame, isInitialLoadDone]);
-
-  const calculateTotalCps = useCallback((buildings) => {
-    return buildings.reduce((total, building) => total + building.baseCps * building.count, 0);
-  }, []);
-
-  const calculateBuildingCost = useCallback((building) => {
-    return Math.floor(building.baseCost * Math.pow(1.15, building.count));
-  }, []);
-
   const buyBuilding = useCallback((buildingName) => {
     setGameState(prevState => {
       const buildingIndex = prevState.buildings.findIndex(b => b.name === buildingName);
@@ -254,8 +219,91 @@ function App() {
         cps: newCps
       };
     });
-    // No need to trigger save here, it will be handled by the useEffect
   }, [calculateBuildingCost, calculateTotalCps]);
+
+  const checkAchievements = useCallback(() => {
+    if (!gameState) {
+      console.log('Game state is null, skipping achievement check');
+      return;
+    }
+
+    const newAchievements = achievements.filter(
+      achievement => {
+        try {
+          return !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState);
+        } catch (error) {
+          console.error(`Error checking achievement ${achievement.id}:`, error);
+          return false;
+        }
+      }
+    );
+
+    if (newAchievements.length > 0) {
+      setUnlockedAchievements(prev => [...prev, ...newAchievements.map(a => a.id)]);
+    }
+  }, [gameState, unlockedAchievements]);
+
+  const clickCookie = useCallback(() => {
+    setGameState(prevState => ({
+      ...prevState,
+      cookies: prevState.cookies + 1
+    }));
+  }, []);
+
+  useEffect(() => {
+    const initGame = async () => {
+      try {
+        await loadTelegramScript();
+        const id = await getUserId();
+        console.log('User ID retrieved:', id);
+        if (id) {
+          setUserId(id);
+          await loadGameData(id);
+        } else {
+          console.error('User ID is null or undefined');
+          setIsLoading(false);
+          setLoadingStatus('Failed to get user ID');
+        }
+      } catch (error) {
+        console.error('Failed to initialize game:', error);
+        setUserId(ANON_USER_ID);
+        await loadGameData(ANON_USER_ID);
+      }
+    };
+
+    initGame();
+  }, [loadTelegramScript, getUserId, loadGameData]);
+
+  useEffect(() => {
+    let saveInterval;
+    if (isInitialLoadDone) {
+      saveInterval = setInterval(saveGame, 10000);
+    }
+    return () => {
+      if (saveInterval) {
+        clearInterval(saveInterval);
+      }
+    };
+  }, [saveGame, isInitialLoadDone]);
+
+  useEffect(() => {
+    if (gameState) {
+      checkAchievements();
+    }
+  }, [gameState, checkAchievements]);
+
+  useEffect(() => {
+    if (!gameState) return;
+
+    const cookieInterval = setInterval(() => {
+      setGameState(prevState => ({
+        ...prevState,
+        cookies: prevState.cookies + prevState.cps / 10
+      }));
+    }, 100);
+
+    return () => clearInterval(cookieInterval);
+  }, [gameState]);
 
   useEffect(() => {
     return () => {
@@ -281,58 +329,6 @@ function App() {
       window.removeEventListener('offline', handleOffline);
     };
   }, [saveGame]);
-
-  const checkAchievements = useCallback(() => {
-    if (!gameState) {
-      console.log('Game state is null, skipping achievement check');
-      return;
-    }
-
-    const newAchievements = achievements.filter(
-      achievement => {
-        try {
-          return !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState);
-        } catch (error) {
-          console.error(`Error checking achievement ${achievement.id}:`, error);
-          return false;
-        }
-      }
-    );
-
-    if (newAchievements.length > 0) {
-      setUnlockedAchievements(prev => [...prev, ...newAchievements.map(a => a.id)]);
-    }
-  }, [gameState, unlockedAchievements]);
-
-  useEffect(() => {
-    if (gameState) {
-      checkAchievements();
-    }
-  }, [gameState, checkAchievements]);
-
-  const clickCookie = useCallback(() => {
-    setGameState(prevState => ({
-      ...prevState,
-      cookies: prevState.cookies + 1
-    }));
-    // No need to trigger save here, it will be handled by the useEffect
-  }, []);
-
-  useEffect(() => {
-    if (!gameState) return;
-
-    const cookieInterval = setInterval(() => {
-      setGameState(prevState => {
-        if (!prevState) return initialGameState;
-        return {
-          ...prevState,
-          cookies: prevState.cookies + prevState.cps / 10  // Update every 100ms
-        };
-      });
-    }, 100);
-
-    return () => clearInterval(cookieInterval);
-  }, [gameState]);
 
   useEffect(() => {
     console.log('Current game state:', JSON.stringify(gameState));
