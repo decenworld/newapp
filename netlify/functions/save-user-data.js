@@ -67,6 +67,7 @@ exports.handler = async (event, context) => {
     const userExists = await conn.query(checkUserQuery, [userId]);
 
     let query;
+    let params;
     if (userExists.length > 0) {
       // User exists, update the data
       query = `
@@ -77,6 +78,7 @@ exports.handler = async (event, context) => {
             last_updated = CURRENT_TIMESTAMP
         WHERE user_id = ?
       `;
+      params = [cookies_collected, buildings_data, achievements, userId];
       console.log('Updating existing user data');
     } else {
       // User doesn't exist, insert new data
@@ -84,11 +86,12 @@ exports.handler = async (event, context) => {
         INSERT INTO user_data (user_id, cookies_collected, buildings_data, achievements)
         VALUES (?, ?, ?, ?)
       `;
+      params = [userId, cookies_collected, buildings_data, achievements];
       console.log('Inserting new user data');
     }
 
     console.log('Executing query:', query);
-    console.log('Query parameters:', [cookies_collected, buildings_data, achievements, userId]);
+    console.log('Query parameters:', params);
 
     if (achievements) {
       // Parse the achievements JSON, remove duplicates, and stringify again
@@ -96,7 +99,7 @@ exports.handler = async (event, context) => {
       achievements = JSON.stringify(uniqueAchievements);
     }
 
-    const result = await conn.query(query, [cookies_collected, buildings_data, achievements, userId]);
+    const result = await conn.query(query, params);
     const safeResult = convertBigIntToNumber(result);
     console.log('Save result:', JSON.stringify(safeResult));
 
@@ -114,7 +117,7 @@ exports.handler = async (event, context) => {
     if (conn) {
       try {
         await conn.release();
-        console.log('Database connection released');
+        console.log('Database connection released.');
       } catch (releaseError) {
         console.error('Error releasing database connection:', releaseError);
       }
