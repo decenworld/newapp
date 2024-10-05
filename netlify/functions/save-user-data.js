@@ -42,7 +42,7 @@ exports.handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
-  const { userId, cookies_collected, buildings_data, achievements } = data;
+  let { userId, cookies_collected, buildings_data, achievements } = data;
 
   if (!userId) {
     console.error('Missing userId in request');
