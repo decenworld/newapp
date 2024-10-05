@@ -4,11 +4,13 @@ import InvitePopup from './InvitePopup';
 import AchievementsPopup from './AchievementsPopup';
 import cookieIcon from '../assets/cookie-icon.png';
 import './BottomMenu.css'; // Make sure to create this CSS file
+import MiscPopup from './MiscPopup';
 
 const BottomMenu = () => {
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
+  const [isMiscPopupOpen, setIsMiscPopupOpen] = useState(false);
 
   return (
     <>
@@ -29,7 +31,7 @@ const BottomMenu = () => {
           <span className="menu-icon" role="img" aria-label="Achievements">🏆</span>
           <span>Achievements</span>
         </button>
-        <button>
+        <button onClick={() => setIsMiscPopupOpen(true)}>
           <span className="menu-icon" role="img" aria-label="Misc">⋯</span>
           <span>Misc</span>
         </button>
@@ -37,6 +39,7 @@ const BottomMenu = () => {
       {isStoreOpen && <Store onClose={() => setIsStoreOpen(false)} />}
       {isInviteOpen && <InvitePopup onClose={() => setIsInviteOpen(false)} />}
       {isAchievementsOpen && <AchievementsPopup onClose={() => setIsAchievementsOpen(false)} />}
+      {isMiscPopupOpen && <MiscPopup onClose={() => setIsMiscPopupOpen(false)} />}
     </>
   );
 };

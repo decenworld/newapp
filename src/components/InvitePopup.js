@@ -9,10 +9,10 @@ const InvitePopup = ({ onClose }) => {
     if (isTelegramAvailable && telegramWebApp) {
       // Generate a referral link using Telegram data
       const newReferralCode = Math.random().toString(36).substring(2, 8);
-      setReferralLink(`https://t.me/YourBotUsername?start=${newReferralCode}`);
+      setReferralLink(`https://t.me/cookieclickergamesol_bot/cookie?start=${newReferralCode}`);
     } else {
       // Generate a dummy referral link for local mode
-      setReferralLink(`https://example.com/invite/${Math.random().toString(36).substring(2, 8)}`);
+      setReferralLink(`https://t.me/cookieclickergamesol_bot/cookie?start=${Math.random().toString(36).substring(2, 8)}`);
     }
   }, [isTelegramAvailable, telegramWebApp]);
 

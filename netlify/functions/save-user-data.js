@@ -90,6 +90,12 @@ exports.handler = async (event, context) => {
     console.log('Executing query:', query);
     console.log('Query parameters:', [cookies_collected, buildings_data, achievements, userId]);
 
+    if (achievements) {
+      // Parse the achievements JSON, remove duplicates, and stringify again
+      const uniqueAchievements = [...new Set(JSON.parse(achievements))];
+      achievements = JSON.stringify(uniqueAchievements);
+    }
+
     const result = await conn.query(query, [cookies_collected, buildings_data, achievements, userId]);
     const safeResult = convertBigIntToNumber(result);
     console.log('Save result:', JSON.stringify(safeResult));

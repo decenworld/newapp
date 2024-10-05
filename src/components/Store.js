@@ -1,9 +1,11 @@
 import React, { useContext } from 'react';
 import { GameContext } from '../App';
+import './Store.css';
 
 const Store = ({ onClose }) => {
   const { gameState, buyBuilding, calculateBuildingCost } = useContext(GameContext);
 
+ 
   const formatNumber = (num) => {
     if (num >= 1e6) return (num / 1e6).toFixed(2) + ' million';
     if (num >= 1e3) return (num / 1e3).toFixed(2) + 'k';
@@ -21,7 +23,13 @@ const Store = ({ onClose }) => {
           const cost = calculateBuildingCost(building);
           return (
             <div key={index} className="upgrade-item">
-              <div className="upgrade-icon">{building.name[0]}</div>
+              <div className="upgrade-icon">
+                <img 
+                  src={`/images/${building.name.toLowerCase()}.png`} 
+                  alt={building.name} 
+                  className="building-icon"
+                />
+              </div>
               <div className="upgrade-info">
                 <div className="upgrade-name">{building.name} ({building.count})</div>
                 <div className="upgrade-description">Produces {building.baseCps} cookies per second.</div>

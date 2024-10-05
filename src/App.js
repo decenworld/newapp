@@ -229,17 +229,21 @@ function App() {
 
     const newAchievements = achievements.filter(
       achievement => {
-        try {
-          return !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState);
-        } catch (error) {
-          console.error(`Error checking achievement ${achievement.id}:`, error);
-          return false;
-        }
+        return !unlockedAchievements.includes(achievement.id) && achievement.condition(gameState);
       }
     );
 
     if (newAchievements.length > 0) {
-      setUnlockedAchievements(prev => [...prev, ...newAchievements.map(a => a.id)]);
+      setUnlockedAchievements(prev => {
+        // Create a Set from the previous achievements to ensure uniqueness
+        const uniqueAchievements = new Set(prev);
+        
+        // Add new achievements to the Set
+        newAchievements.forEach(achievement => uniqueAchievements.add(achievement.id));
+        
+        // Convert the Set back to an array
+        return Array.from(uniqueAchievements);
+      });
     }
   }, [gameState, unlockedAchievements]);
 
@@ -298,9 +302,9 @@ function App() {
     const cookieInterval = setInterval(() => {
       setGameState(prevState => ({
         ...prevState,
-        cookies: prevState.cookies + prevState.cps / 10
+        cookies: prevState.cookies + prevState.cps / 2
       }));
-    }, 100);
+    }, 500);
 
     return () => clearInterval(cookieInterval);
   }, [gameState]);
@@ -363,16 +367,6 @@ function App() {
           {isOfflineRef.current && <div className="offline-message">You are offline. Game progress will be saved when you reconnect.</div>}
           <div className="App">
             <Game />
-            <button onClick={() => window.open('/.netlify/functions/download-data', '_blank')}>
-              Download Game Data
-            </button>
-            <div>
-              <h3>Debug Info:</h3>
-              <p>User ID: {userId || 'Not available'}</p>
-              <p>URL: {window.location.href}</p>
-              <p>Initial Load Done: {isInitialLoadDone ? 'Yes' : 'No'}</p>
-              <p>Loading Status: {loadingStatus}</p>
-            </div>
           </div>
         </>
       )}
