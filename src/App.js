@@ -155,7 +155,7 @@ function App() {
 
     const currentState = {
       userId: userId,
-      cookies_collected: Number(Math.floor(gameState.cookies)),
+      cookies_collected: Math.floor(gameState.cookies),
       buildings_data: JSON.stringify({
         buildings: gameState.buildings,
         upgrades: gameState.upgrades
