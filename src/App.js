@@ -71,7 +71,7 @@ function App() {
 
   const getUserId = useCallback(() => {
     return new Promise((resolve) => {
-      setLoadingStatus('Getting user ID...');
+      setLoadingStatus('Loading...');
       if (window.Telegram && window.Telegram.WebApp) {
         let timeoutId = setTimeout(() => {
           console.log('Timed out waiting for Telegram user ID, using anon');
@@ -359,7 +359,7 @@ function App() {
       {isLoading ? (
         <div>
           <p>Loading... {loadingStatus}</p>
-          <p>User ID: {userId || 'Not available yet'}</p>
+          <p>Wait: {userId || 'Not available yet'}</p>
         </div>
       ) : (
         <>
