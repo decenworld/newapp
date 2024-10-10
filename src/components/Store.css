@@ -1,9 +1,130 @@
 .building-icon {
-    width: 70px;  /* Adjust as needed */
-    height: 70px; /* Adjust as needed */
+    width: 64px;
+    height: 64px;
     object-fit: contain;
 }
 
 .upgrade-icon {
     background-color: transparent;
+}
+
+.store-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#store {
+    position: relative;
+    width: 330px;
+    background-color: #1a1a1a;
+    border: 2px solid #4d4d4d;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#storeTitle {
+    position: relative;
+    width: 100%;
+    background-color: #333;
+    padding: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    text-align: center;
+    border-bottom: 1px solid #4d4d4d;
+}
+
+.storeSection {
+    width: 100%;
+    position: relative;
+    overflow-y: auto;
+    max-height: calc(80vh - 40px);
+}
+
+.product {
+    height: 64px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.1s;
+    border-bottom: 1px solid #333;
+}
+
+.product:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.product .icon {
+    width: 64px;
+    height: 64px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.product .icon.off {
+    opacity: 0.5;
+}
+
+.product .content {
+    margin-left: 70px;
+    padding: 8px;
+}
+
+.product .productName {
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+}
+
+.product .price {
+    font-size: 12px;
+    color: #6f6;
+}
+
+.product .owned {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    font-size: 24px;
+    color: #fff;
+}
+
+.product.locked .productName,
+.product.locked .price,
+.product.locked .owned {
+    color: #666;
+}
+
+.product.locked .icon {
+    filter: grayscale(100%) brightness(30%);
+}
+
+.product.locked .building-icon {
+    filter: grayscale(100%) brightness(30%);
+}
+
+.store-close {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    font-size: 24px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.store-close:hover {
+    color: #ff4444;
 }

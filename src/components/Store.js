@@ -5,7 +5,6 @@ import './Store.css';
 const Store = ({ onClose }) => {
   const { gameState, buyBuilding, calculateBuildingCost } = useContext(GameContext);
 
- 
   const formatNumber = (num) => {
     if (num >= 1e6) return (num / 1e6).toFixed(2) + ' million';
     if (num >= 1e3) return (num / 1e3).toFixed(2) + 'k';
@@ -13,39 +12,36 @@ const Store = ({ onClose }) => {
   };
 
   return (
-    <div className="store">
-      <div className="store-header">
-        Buildings
+    <div className="store-overlay">
+      <div id="store">
+        <div id="storeTitle" className="inset title zoneTitle">Store</div>
+        <div id="products" className="storeSection">
+          {gameState.buildings.map((building, index) => {
+            const cost = calculateBuildingCost(building);
+            const isLocked = gameState.cookies < cost;
+            return (
+              <div 
+                key={index} 
+                className={`product ${isLocked ? 'locked disabled' : 'unlocked enabled'}`}
+                onClick={() => !isLocked && buyBuilding(building.name)}
+              >
+                <div className="icon">
+                  <img 
+                    src={`/images/${building.name.toLowerCase()}.png`} 
+                    alt={building.name} 
+                    className="building-icon"
+                  />
+                </div>
+                <div className="content">
+                  <div className="title productName">{building.name}</div>
+                  <span className="price">{formatNumber(cost)}</span>
+                  <div className="title owned">{building.count}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
         <span className="store-close" onClick={onClose}>&times;</span>
-      </div>
-      <div className="store-content">
-        {gameState.buildings.map((building, index) => {
-          const cost = calculateBuildingCost(building);
-          return (
-            <div key={index} className="upgrade-item">
-              <div className="upgrade-icon">
-                <img 
-                  src={`/images/${building.name.toLowerCase()}.png`} 
-                  alt={building.name} 
-                  className="building-icon"
-                />
-              </div>
-              <div className="upgrade-info">
-                <div className="upgrade-name">{building.name} ({building.count})</div>
-                <div className="upgrade-description">Produces {building.baseCps} cookies per second.</div>
-              </div>
-              <div className="upgrade-buttons">
-                <button
-                  className="buy-button"
-                  onClick={() => buyBuilding(building.name)}
-                  disabled={gameState.cookies < cost}
-                >
-                  Buy 1 ({formatNumber(cost)} cookies)
-                </button>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
